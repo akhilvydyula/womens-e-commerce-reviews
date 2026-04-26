@@ -6,6 +6,7 @@ RAW_DIR = DATA_DIR / "raw"
 PROCESSED_DIR = DATA_DIR / "processed"
 SUBMISSIONS_DIR = DATA_DIR / "submissions"
 MODELS_DIR = PROJECT_ROOT / "models"
+LOGS_DIR = PROJECT_ROOT / "logs"
 
 RAW_FILE_NAME = "Womens Clothing E-Commerce Reviews.csv"
 RAW_FILE_PATH = RAW_DIR / RAW_FILE_NAME
@@ -24,5 +25,5 @@ TEST_SIZE = 0.2
 
 
 def ensure_dirs() -> None:
-    for path in [DATA_DIR, RAW_DIR, PROCESSED_DIR, SUBMISSIONS_DIR, MODELS_DIR]:
+    for path in [DATA_DIR, RAW_DIR, PROCESSED_DIR, SUBMISSIONS_DIR, MODELS_DIR, LOGS_DIR]:
         path.mkdir(parents=True, exist_ok=True)

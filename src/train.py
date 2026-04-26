@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict
@@ -13,10 +14,37 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report, f1_score, roc_auc_score
 from sklearn.pipeline import Pipeline
 
-from src.config import MODELS_DIR, RAW_FILE_PATH, SUBMISSIONS_DIR, TARGET_COLUMN, ensure_dirs
+from src.config import LOGS_DIR, MODELS_DIR, RAW_FILE_PATH, SUBMISSIONS_DIR, TARGET_COLUMN, ensure_dirs
 from src.data import basic_cleaning, load_raw_data, make_text_feature, split_data
 from src.download_data import download_dataset
 from src.features import build_tabular_preprocessor, build_text_tabular_preprocessor
+
+LOGGER = logging.getLogger(__name__)
+
+
+def setup_logging(model_name: str) -> Path:
+    """Configure console + file logging for this run."""
+    ensure_dirs()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = LOGS_DIR / f"train_{model_name}_{timestamp}.log"
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    root_logger.handlers.clear()
+
+    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+
+    file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(formatter)
+
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(file_handler)
+    return log_path
 
 
 def get_model_pipeline(model_type: str) -> Pipeline:
@@ -139,24 +167,36 @@ def make_submission_file(model: Pipeline, source_df: pd.DataFrame, model_name: s
 
 
 def run(args: argparse.Namespace) -> None:
+    log_path = setup_logging(args.model)
+    LOGGER.info("Starting training run with args: %s", vars(args))
+    LOGGER.info("Logs will be written to: %s", log_path)
     ensure_dirs()
     if args.download_data:
+        LOGGER.info("Downloading data from Kaggle dataset: %s", args.dataset_slug)
         path = download_dataset(args.dataset_slug)
-        print(f"Downloaded dataset CSV to: {path}")
+        LOGGER.info("Downloaded dataset CSV to: %s", path)
 
-    print(f"Loading data from: {RAW_FILE_PATH}")
+    LOGGER.info("Loading data from: %s", RAW_FILE_PATH)
     df = load_raw_data(RAW_FILE_PATH)
+    LOGGER.debug("Raw dataset shape: %s", df.shape)
     df = basic_cleaning(df)
+    LOGGER.debug("Post-cleaning dataset shape: %s", df.shape)
     df["text"] = make_text_feature(df)
+    LOGGER.debug("Text feature generated.")
 
     X_train, X_valid, y_train, y_valid = split_data(df, TARGET_COLUMN)
+    LOGGER.info(
+        "Split complete: train_rows=%s, valid_rows=%s", len(X_train), len(X_valid)
+    )
 
     pipeline = get_model_pipeline(args.model)
     if args.model == "advanced" and args.tune:
+        LOGGER.info("Running lightweight tuning for advanced model.")
         pipeline = maybe_tune_advanced(pipeline, X_train, y_train)
 
-    print(f"\nTraining model: {args.model}")
+    LOGGER.info("Training model: %s", args.model)
     pipeline.fit(X_train, y_train)
+    LOGGER.info("Training complete.")
 
     y_pred = pipeline.predict(X_valid)
     if hasattr(pipeline[-1], "predict_proba"):
@@ -165,15 +205,18 @@ def run(args: argparse.Namespace) -> None:
         y_proba = y_pred
 
     metrics = evaluate_binary(y_valid, y_pred, y_proba)
+    LOGGER.info("Validation metrics: %s", metrics)
     print_metrics(metrics, y_valid, y_pred)
 
     model_path = MODELS_DIR / f"{args.model}_pipeline.joblib"
     joblib.dump(pipeline, model_path)
-    print(f"\nSaved model to: {model_path}")
+    LOGGER.info("Saved model to: %s", model_path)
 
     if args.make_submission:
         sub_path = make_submission_file(pipeline, df.drop(columns=[TARGET_COLUMN]), args.model)
-        print(f"Submission written to: {sub_path}")
+        LOGGER.info("Submission written to: %s", sub_path)
+
+    LOGGER.info("Run completed successfully.")
 
 
 def parse_args() -> argparse.Namespace:
