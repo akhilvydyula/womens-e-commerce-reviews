@@ -11,6 +11,7 @@ Flow (matches how many teams work):
 
 Use `--cv-f1` to log stratified K-fold F1 on `X_train` (mean + std).
 Use `--mlflow` to send params/metrics/artifact to MLflow (Databricks or local `mlruns`).
+After `src.pipeline.etl`, you can pass `--data-path` to read `data/processed/clean_reviews.csv`.
 """
 from __future__ import annotations
 
@@ -18,6 +19,7 @@ import argparse
 import json
 import logging
 import os
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -51,6 +53,7 @@ from src.config import (
 from src.data import basic_cleaning, load_raw_data, make_text_feature, split_data
 from src.download_data import download_dataset
 from src.features import build_tabular_preprocessor, build_text_tabular_preprocessor
+from src.pipeline.audit import append_audit_event
 
 LOGGER = logging.getLogger(__name__)
 
@@ -308,6 +311,12 @@ def make_submission_file(model: Pipeline, source_df: pd.DataFrame, model_name: s
 
 
 def run(args: argparse.Namespace) -> None:
+    run_id = uuid.uuid4().hex[:12]
+    append_audit_event(
+        {"event": "train_start", "model": args.model, "args": vars(args)},
+        run_id=run_id,
+        component="train",
+    )
     log_path = setup_logging(args.model)
     LOGGER.info("Starting training run with args: %s", vars(args))
     LOGGER.info("Logs will be written to: %s", log_path)
@@ -317,8 +326,9 @@ def run(args: argparse.Namespace) -> None:
         path = download_dataset(args.dataset_slug)
         LOGGER.info("Downloaded dataset CSV to: %s", path)
 
-    LOGGER.info("Loading data from: %s", RAW_FILE_PATH)
-    df = load_raw_data(RAW_FILE_PATH)
+    data_path = args.data_path if getattr(args, "data_path", None) is not None else RAW_FILE_PATH
+    LOGGER.info("Loading data from: %s", data_path)
+    df = load_raw_data(data_path)
     LOGGER.debug("Raw dataset shape: %s", df.shape)
     df = basic_cleaning(df)
     LOGGER.debug("Post-cleaning dataset shape: %s", df.shape)
@@ -384,7 +394,7 @@ def run(args: argparse.Namespace) -> None:
         "cv_splits": args.cv_splits,
         "cv_f1": args.cv_f1,
         "random_state": RANDOM_STATE,
-        "raw_file": str(RAW_FILE_PATH),
+        "data_file": str(data_path),
     }
     mlflow_log_run(
         args,
@@ -399,6 +409,16 @@ def run(args: argparse.Namespace) -> None:
         LOGGER.info("Submission written to: %s", sub_path)
 
     LOGGER.info("Run completed successfully.")
+    append_audit_event(
+        {
+            "event": "train_complete",
+            "model": args.model,
+            "model_path": str(model_path),
+            "val_metrics": metrics,
+        },
+        run_id=run_id,
+        component="train",
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -430,6 +450,12 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="nicapotato/womens-ecommerce-clothing-reviews",
         help="Kaggle dataset slug for direct download.",
+    )
+    parser.add_argument(
+        "--data-path",
+        type=Path,
+        default=None,
+        help="Input CSV for training (default: configured raw path). After ETL use data/processed/clean_reviews.csv.",
     )
     parser.add_argument(
         "--cv-f1",

@@ -11,3 +11,5 @@ data/submissions/*
 !data/processed/.gitkeep
 !data/submissions/.gitkeep
 mlruns/
+logs/*
+!logs/.gitkeep

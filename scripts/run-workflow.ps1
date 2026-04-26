@@ -8,9 +8,9 @@
 param(
     [Parameter(Position = 0)]
     [ValidateSet(
-        "install", "install-train", "validate", "train-baseline", "train-better",
-        "train-advanced", "train-xgb", "test", "inference", "api", "mlflow-better",
-        "download-better", "help"
+        "setup", "quickstart", "check", "check-cov", "install", "install-train", "install-dev",
+        "validate", "etl", "explain", "train-baseline", "train-better", "train-advanced", "train-xgb", "train-all",
+        "test", "test-cov", "inference", "api", "mlflow-better", "download-better", "help"
     )]
     [string]$Command = "help"
 )
@@ -28,14 +28,45 @@ function Invoke-Py {
 }
 
 switch ($Command) {
+    "setup" { Invoke-Py @("-m", "pip", "install", "-r", "requirements.txt") }
+    "quickstart" {
+        Invoke-Py @("-m", "pip", "install", "-r", "requirements.txt")
+        Invoke-Py @("-m", "src.pipeline.validate")
+        Invoke-Py @("-m", "src.train", "--model", "better", "--cv-f1")
+        Invoke-Py @("-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py")
+    }
+    "check" {
+        Invoke-Py @("-m", "src.pipeline.validate")
+        Invoke-Py @("-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py")
+    }
+    "check-cov" {
+        Invoke-Py @("-m", "src.pipeline.validate")
+        Invoke-Py @("-m", "pip", "install", "-q", "coverage")
+        Invoke-Py @("-m", "coverage", "run", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py")
+        Invoke-Py @("-m", "coverage", "report", "-m")
+    }
     "install" { Invoke-Py @("-m", "pip", "install", "-r", "requirements.txt") }
     "install-train" { Invoke-Py @("-m", "pip", "install", "-r", "requirements_train.txt") }
+    "install-dev" { Invoke-Py @("-m", "pip", "install", "-r", "requirements-dev.txt") }
     "validate" { Invoke-Py @("-m", "src.pipeline.validate") }
+    "etl" { Invoke-Py @("-m", "src.pipeline.etl") }
+    "explain" { Invoke-Py @("-m", "src.interpretability") }
     "train-baseline" { Invoke-Py @("-m", "src.train", "--model", "baseline", "--cv-f1") }
     "train-better" { Invoke-Py @("-m", "src.train", "--model", "better", "--cv-f1") }
     "train-advanced" { Invoke-Py @("-m", "src.train", "--model", "advanced", "--cv-f1") }
     "train-xgb" { Invoke-Py @("-m", "src.train", "--model", "advanced_xgb", "--cv-f1") }
+    "train-all" {
+        Invoke-Py @("-m", "src.train", "--model", "baseline", "--cv-f1")
+        Invoke-Py @("-m", "src.train", "--model", "better", "--cv-f1")
+        Invoke-Py @("-m", "src.train", "--model", "advanced", "--cv-f1")
+        Invoke-Py @("-m", "src.train", "--model", "advanced_xgb", "--cv-f1")
+    }
     "test" { Invoke-Py @("-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py") }
+    "test-cov" {
+        Invoke-Py @("-m", "pip", "install", "-q", "coverage")
+        Invoke-Py @("-m", "coverage", "run", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py")
+        Invoke-Py @("-m", "coverage", "report", "-m")
+    }
     "inference" {
         $m = if ($env:MODEL) { $env:MODEL } else { "better" }
         Invoke-Py @(
@@ -49,6 +80,7 @@ switch ($Command) {
     "download-better" { Invoke-Py @("-m", "src.train", "--download-data", "--model", "better", "--cv-f1") }
     "help" {
         Write-Host "Usage: .\scripts\run-workflow.ps1 <command>"
-        Write-Host "Commands: install, install-train, validate, train-baseline, train-better, train-advanced, train-xgb, test, inference, api, mlflow-better, download-better"
+        Write-Host "Common: setup, quickstart, check, check-cov, install-dev, etl, explain, train-all"
+        Write-Host "Also: install, install-train, validate, train-*, test, test-cov, inference, api, mlflow-better, download-better"
     }
 }

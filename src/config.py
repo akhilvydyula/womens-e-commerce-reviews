@@ -17,6 +17,13 @@ LOGS_DIR = PROJECT_ROOT / "logs"
 
 RAW_FILE_NAME = "Womens Clothing E-Commerce Reviews.csv"
 RAW_FILE_PATH = RAW_DIR / RAW_FILE_NAME
+
+# Output of the ETL pipeline (`src.pipeline.etl`): ML-ready, cleaned tabular file.
+PROCESSED_CLEAN_CSV = PROCESSED_DIR / "clean_reviews.csv"
+# One JSON manifest per ETL run (lineage + row counts + paths).
+ETL_MANIFEST_DIR = PROCESSED_DIR / "etl_manifests"
+# Append-only JSONL for pipeline/training audit (who/what/when style events).
+AUDIT_LOG_DIR = LOGS_DIR / "audit"
 KAGGLE_DATASET_SLUG = "nicapotato/womens-ecommerce-clothing-reviews"
 KAGGLE_DATASET_URL = "https://www.kaggle.com/datasets/nicapotato/womens-ecommerce-clothing-reviews/data"
 
@@ -35,5 +42,14 @@ TEST_SIZE = 0.2
 
 def ensure_dirs() -> None:
     """Create on-disk folders so scripts never fail on first write."""
-    for path in [DATA_DIR, RAW_DIR, PROCESSED_DIR, SUBMISSIONS_DIR, MODELS_DIR, LOGS_DIR]:
+    for path in [
+        DATA_DIR,
+        RAW_DIR,
+        PROCESSED_DIR,
+        SUBMISSIONS_DIR,
+        MODELS_DIR,
+        LOGS_DIR,
+        ETL_MANIFEST_DIR,
+        AUDIT_LOG_DIR,
+    ]:
         path.mkdir(parents=True, exist_ok=True)

@@ -263,3 +263,5 @@ For Makefile / PowerShell automation, see the repository `Makefile` and `scripts
 
 For Databricks + MLflow and homework baselines, see `docs/DATABRICKS_MLFLOW.md` and `docs/STUDENT_ASSIGNMENTS_AND_BASELINES.md`.
 
+For the full **data engineering → production → monitoring → audit** narrative mapped to this codebase, see `docs/ML_PRODUCT_RAW_TO_PRODUCTION.md`.
+

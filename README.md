@@ -29,8 +29,14 @@ It is designed for students to learn in stages:
 │  ├─ download_data.py
 │  ├─ features.py
 │  ├─ inference.py
+│  ├─ interpretability.py
 │  ├─ api.py
-│  └─ train.py
+│  ├─ train.py
+│  └─ pipeline/
+│     ├─ validate.py
+│     ├─ etl.py
+│     └─ audit.py
+├─ docs/                   # industry + ML product guides (see ML_PRODUCT_RAW_TO_PRODUCTION.md)
 ├─ requirements.txt
 └─ README.md
 ```
@@ -45,8 +51,8 @@ pip install -r requirements.txt
 
 ### Automation (one-command workflows)
 
-- **Make** (Git Bash, WSL, macOS, Linux, or Windows with `make` installed): see `Makefile` — e.g. `make train-better`, `make validate`, `make mlflow-better`.
-- **PowerShell (Windows):** `.\scripts\run-workflow.ps1 train-better` (same curated commands; no `make` required).
+- **Make:** from repo root run `make` or `make help` for the full list. **Quick path:** `make quickstart` (install + validate + train better + test). Full cheat sheet: `docs/MAKE_COMMANDS.md`.
+- **PowerShell (no `make`):** `.\scripts\run-workflow.ps1` — same ideas (e.g. `train-better`, `test-cov`).
 
 Databricks + MLflow: `docs/DATABRICKS_MLFLOW.md`. Student baselines / homework: `docs/STUDENT_ASSIGNMENTS_AND_BASELINES.md`.
 
@@ -164,6 +170,16 @@ This writes:
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
+With **coverage** (install dev deps, then run):
+
+```bash
+pip install -r requirements-dev.txt
+coverage run -m unittest discover -s tests -p "test_*.py"
+coverage report -m
+```
+
+Or: `make test-cov` / `.\scripts\run-workflow.ps1 test-cov`
+
 ## 5e) HTTP API (FastAPI)
 
 After training (so `models/better_pipeline.joblib` exists):
@@ -215,5 +231,6 @@ For a practical end-to-end learning track (data engineering -> KPI analytics -> 
 - `docs/KPI_DEFINITIONS.md`
 - `docs/DEPLOYMENT_RUNBOOK.md`
 - `docs/LLM_VS_CLASSICAL_ML.md`
+- `docs/ML_PRODUCT_RAW_TO_PRODUCTION.md` (data engineering → prod → CI/CD → monitoring → audit → interpretability)
 - `data/README.md` (what each folder is for)
 

@@ -18,6 +18,28 @@ python -m src.pipeline.validate
 
 Or with Make: `make validate` (see repository `Makefile`).
 
+## 2b) ETL (raw → curated ML/analytics file)
+
+```bash
+make etl
+# or: python -m src.pipeline.etl
+```
+
+Writes `data/processed/clean_reviews.csv`, a manifest under `data/processed/etl_manifests/`, and audit lines under `logs/audit/`. Train from the curated file:
+
+```bash
+python -m src.train --model better --data-path data/processed/clean_reviews.csv --cv-f1
+```
+
+## 2c) Interpretability (business-facing, linear model)
+
+After training `better`:
+
+```bash
+make explain
+# or: python -m src.interpretability
+```
+
 Output:
 - JSON report in `data/processed/quality/`
 
