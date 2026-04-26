@@ -8,7 +8,7 @@
 param(
     [Parameter(Position = 0)]
     [ValidateSet(
-        "setup", "quickstart", "check", "check-cov", "install", "install-train", "install-dev",
+        "setup", "quickstart", "check", "check-cov", "ci-local", "install", "install-train", "install-dev",
         "validate", "etl", "explain", "train-baseline", "train-better", "train-advanced", "train-xgb", "train-all",
         "test", "test-cov", "inference", "api", "mlflow-better", "download-better", "help"
     )]
@@ -45,6 +45,14 @@ switch ($Command) {
         Invoke-Py @("-m", "coverage", "run", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py")
         Invoke-Py @("-m", "coverage", "report", "-m")
     }
+    "ci-local" {
+        Invoke-Py @("-m", "pip", "install", "-q", "-r", "requirements-ci.txt")
+        Invoke-Py @("-m", "pip_audit", "-r", "requirements.txt", "--desc", "on")
+        Invoke-Py @("-m", "pip_audit", "-r", "requirements_train.txt", "--desc", "on")
+        Invoke-Py @("-m", "bandit", "-r", "src", "-ll", "-f", "txt")
+        Invoke-Py @("-m", "coverage", "run", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py")
+        Invoke-Py @("-m", "coverage", "report", "-m", "--fail-under=70")
+    }
     "install" { Invoke-Py @("-m", "pip", "install", "-r", "requirements.txt") }
     "install-train" { Invoke-Py @("-m", "pip", "install", "-r", "requirements_train.txt") }
     "install-dev" { Invoke-Py @("-m", "pip", "install", "-r", "requirements-dev.txt") }
@@ -80,7 +88,7 @@ switch ($Command) {
     "download-better" { Invoke-Py @("-m", "src.train", "--download-data", "--model", "better", "--cv-f1") }
     "help" {
         Write-Host "Usage: .\scripts\run-workflow.ps1 <command>"
-        Write-Host "Common: setup, quickstart, check, check-cov, install-dev, etl, explain, train-all"
+        Write-Host "Common: setup, quickstart, check, check-cov, ci-local, install-dev, etl, explain, train-all"
         Write-Host "Also: install, install-train, validate, train-*, test, test-cov, inference, api, mlflow-better, download-better"
     }
 }

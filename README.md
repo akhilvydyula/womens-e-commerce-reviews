@@ -56,6 +56,10 @@ pip install -r requirements.txt
 
 Databricks + MLflow: `docs/DATABRICKS_MLFLOW.md`. Student baselines / homework: `docs/STUDENT_ASSIGNMENTS_AND_BASELINES.md`.
 
+**CI/CD (GitHub + GitLab):** `docs/CI_CD_GITHUB_GITLAB.md` — secret scan, dependency audit, Bandit, tests + coverage. Local mirror: `make ci-local` or `.\scripts\run-workflow.ps1 ci-local`.
+
+**GitLab first-time setup (students):** `docs/GITLAB_SETUP_FOR_STUDENTS.md` — push repo, runners, pipelines, debugging.
+
 ## 3) Prepare data (Direct from Kaggle Web/API)
 
 Dataset page:

@@ -34,6 +34,17 @@ class TestApi(unittest.TestCase):
 
             os.environ["MODEL_PATH"] = str(model_path)
             with TestClient(get_app()) as client:
+                root = client.get("/")
+                self.assertEqual(root.status_code, 200)
+                self.assertIn("interactive_docs", root.json())
+                self.assertEqual(root.json().get("browser_playground"), "/ui")
+
+                ui = client.get("/ui")
+                self.assertEqual(ui.status_code, 200)
+                self.assertIn("text/html", ui.headers.get("content-type", ""))
+                self.assertIn("Review inference playground", ui.text)
+                self.assertIn('"/predict"', ui.text)
+
                 h = client.get("/health")
                 self.assertEqual(h.status_code, 200)
                 self.assertEqual(h.json().get("status"), "ok")

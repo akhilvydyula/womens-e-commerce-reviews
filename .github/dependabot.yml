@@ -1,0 +1,10 @@
+# Automated dependency update PRs (GitHub only). Tune schedule / ecosystem as needed.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"

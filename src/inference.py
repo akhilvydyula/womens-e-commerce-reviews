@@ -64,6 +64,9 @@ def prepare_features_for_model(df: pd.DataFrame) -> pd.DataFrame:
     df = clean_inference_data(df)
     if TARGET_COLUMN in df.columns:
         df = df.drop(columns=[TARGET_COLUMN])
+    # Rebuild text from Title + Review Text (ignore any client-supplied `text` column).
+    if "text" in df.columns:
+        df = df.drop(columns=["text"])
     df = df.copy()
     df["text"] = make_text_feature(df)
     return df

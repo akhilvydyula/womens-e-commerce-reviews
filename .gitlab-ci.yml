@@ -1,0 +1,87 @@
+# GitLab CI/CD — secrets, dependency audit, Python SAST (Bandit), tests + coverage.
+# Use a GitLab runner with Docker executor. GIT_DEPTH=0 helps secret scanners.
+#
+# Optional (GitLab Ultimate): uncomment for MR security widgets.
+# include:
+#   - template: Jobs/SAST.gitlab-ci.yml
+#   - template: Jobs/Dependency-Scanning.gitlab-ci.yml
+#   - template: Jobs/Secret-Detection.gitlab-ci.yml
+
+variables:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHON_VERSION: "3.12"
+  GIT_DEPTH: "0"
+
+default:
+  image: python:${PYTHON_VERSION}-slim
+  cache:
+    key: pip-${CI_COMMIT_REF_SLUG}
+    paths:
+      - .cache/pip
+
+stages:
+  - security
+  - test
+
+gitleaks:
+  stage: security
+  image:
+    name: zricethezav/gitleaks:v8.18.4
+    entrypoint: [""]
+  script:
+    - gitleaks detect --source . --no-banner --redact --verbose --exit-code 1
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+pip-audit-requirements:
+  stage: security
+  script:
+    - pip install --upgrade pip pip-audit
+    - pip-audit -r requirements.txt --desc on
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+pip-audit-train:
+  stage: security
+  script:
+    - pip install --upgrade pip pip-audit
+    - pip-audit -r requirements_train.txt --desc on
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+bandit:
+  stage: security
+  script:
+    - pip install --upgrade pip "bandit[toml]>=1.7.7"
+    - bandit -r src -ll -f txt
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+unittest:
+  stage: test
+  needs:
+    - gitleaks
+    - pip-audit-requirements
+    - pip-audit-train
+    - bandit
+  before_script:
+    - pip install --upgrade pip
+    - pip install -r requirements-ci.txt
+  script:
+    - python -m coverage run -m unittest discover -s tests -p "test_*.py"
+    - python -m coverage xml -o coverage.xml
+    - python -m coverage report -m --fail-under=70
+    - python -m coverage html
+  artifacts:
+    when: always
+    paths:
+      - coverage.xml
+      - htmlcov/
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml

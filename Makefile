@@ -24,7 +24,7 @@ PIP := $(PYTHON) -m pip
 TRAIN_EXTRA ?=
 MODEL ?= better
 
-.PHONY: help install install-train install-dev setup quickstart check check-cov \
+.PHONY: help install install-train install-dev setup quickstart check check-cov ci-local \
 	validate etl explain train-baseline train-better train-advanced train-xgb \
 	train-all mlflow-better download-better test test-cov inference api databricks-help
 
@@ -57,6 +57,7 @@ help:
 	@echo "=== Test + serve ==="
 	@echo "  make test             - unit tests"
 	@echo "  make test-cov         - coverage + report (installs coverage if needed)"
+	@echo "  make ci-local          - pip-audit + bandit + tests (no gitleaks; run before push)"
 	@echo "  make inference        - score raw CSV (MODEL=$(MODEL) → models/$(MODEL)_pipeline.joblib)"
 	@echo "  make api              - http://127.0.0.1:8000  (set MODEL_PATH=... if not using better)"
 	@echo ""
@@ -130,9 +131,19 @@ test-cov:
 	@echo ""
 	@echo "Optional HTML: $(PYTHON) -m coverage html  → open htmlcov/index.html"
 
+# Mirrors CI security + test gates (except gitleaks — install gitleaks CLI locally if needed).
+ci-local:
+	$(PIP) install -q -r requirements-ci.txt
+	$(PYTHON) -m pip_audit -r requirements.txt --desc on
+	$(PYTHON) -m pip_audit -r requirements_train.txt --desc on
+	$(PYTHON) -m bandit -r src -ll -f txt
+	$(PYTHON) -m coverage run -m unittest discover -s tests -p "test_*.py"
+	$(PYTHON) -m coverage report -m --fail-under=70
+
 inference:
 	$(PYTHON) -m src.inference --input-csv "data/raw/Womens Clothing E-Commerce Reviews.csv" --model-path "models/$(MODEL)_pipeline.joblib"
 
+# Interactive API docs: http://127.0.0.1:8000/docs  (GET / alone is not an error — use /docs for POST /predict)
 api:
 	$(PYTHON) -m uvicorn src.api:app --reload --host 127.0.0.1 --port 8000
 

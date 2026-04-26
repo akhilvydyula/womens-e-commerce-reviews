@@ -26,6 +26,7 @@ Run these from the **repository root** (folder that contains `Makefile`).
 | Train every tier (long) | `make train-all` |
 | Unit tests | `make test` |
 | Tests + coverage | `make test-cov` |
+| **Local CI mirror** (audit + bandit + tests, no gitleaks) | `make ci-local` |
 | Batch score CSV | `make inference` (default `MODEL=better`) |
 | REST API | `make api` |
 

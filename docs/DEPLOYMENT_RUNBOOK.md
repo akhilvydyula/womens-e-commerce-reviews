@@ -94,6 +94,9 @@ Train a model artifact first (example: `models/better_pipeline.joblib`), then:
 uvicorn src.api:app --reload --host 127.0.0.1 --port 8000
 ```
 
+**Browser tip:** open **`http://127.0.0.1:8000/docs`** (Swagger). The root **`/`** returns a small JSON menu; use **`/docs`** to build a valid **POST /predict** body (wrong JSON keys return a **422** with a hint).
+
+- `GET /` — short JSON with links to `/health`, `/docs`, `/predict`
 - `GET /health` — process + model path probe
 - `POST /predict` — JSON body with the same fields as one CSV row (see `PredictRequest` in `src/api.py`)
 
