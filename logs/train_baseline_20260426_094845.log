@@ -1,0 +1,16 @@
+2026-04-26 09:48:45,134 | INFO | __main__ | Starting training run with args: {'model': 'baseline', 'tune': False, 'make_submission': False, 'download_data': True, 'dataset_slug': 'nicapotato/womens-ecommerce-clothing-reviews'}
+2026-04-26 09:48:45,135 | INFO | __main__ | Logs will be written to: C:\Users\akhil\OneDrive\Documents\ML Kaggle DS Projects\womens-e-commerce-reviews\logs\train_baseline_20260426_094845.log
+2026-04-26 09:48:45,136 | INFO | __main__ | Downloading data from Kaggle dataset: nicapotato/womens-ecommerce-clothing-reviews
+2026-04-26 09:48:45,902 | DEBUG | urllib3.connectionpool | Starting new HTTPS connection (1): api.kaggle.com:443
+2026-04-26 09:48:46,275 | DEBUG | urllib3.connectionpool | https://api.kaggle.com:443 "POST /v1/datasets.DatasetApiService/GetDataset HTTP/1.1" 200 None
+2026-04-26 09:48:46,309 | INFO | __main__ | Downloaded dataset CSV to: C:\Users\akhil\OneDrive\Documents\ML Kaggle DS Projects\womens-e-commerce-reviews\data\raw\Womens Clothing E-Commerce Reviews.csv
+2026-04-26 09:48:46,309 | INFO | __main__ | Loading data from: C:\Users\akhil\OneDrive\Documents\ML Kaggle DS Projects\womens-e-commerce-reviews\data\raw\Womens Clothing E-Commerce Reviews.csv
+2026-04-26 09:48:46,403 | DEBUG | __main__ | Raw dataset shape: (23486, 11)
+2026-04-26 09:48:46,416 | DEBUG | __main__ | Post-cleaning dataset shape: (23486, 11)
+2026-04-26 09:48:46,431 | DEBUG | __main__ | Text feature generated.
+2026-04-26 09:48:46,444 | INFO | __main__ | Split complete: train_rows=18788, valid_rows=4698
+2026-04-26 09:48:46,445 | INFO | __main__ | Training model: baseline
+2026-04-26 09:48:46,572 | INFO | __main__ | Training complete.
+2026-04-26 09:48:46,592 | INFO | __main__ | Validation metrics: {'accuracy': 0.9367816091954023, 'f1': 0.960489557004124, 'roc_auc': 0.97215375100175}
+2026-04-26 09:48:46,602 | INFO | __main__ | Saved model to: C:\Users\akhil\OneDrive\Documents\ML Kaggle DS Projects\womens-e-commerce-reviews\models\baseline_pipeline.joblib
+2026-04-26 09:48:46,602 | INFO | __main__ | Run completed successfully.

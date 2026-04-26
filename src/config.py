@@ -1,5 +1,12 @@
+"""
+Central configuration for paths, feature column names, and train/val split.
+
+Students: keep "magic strings" here so notebooks, CLI training, and the API
+all agree on column names and file locations.
+"""
 from pathlib import Path
 
+# Repo root = parent of the `src/` package (works whether you run from project root or import as a package).
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"
@@ -13,9 +20,11 @@ RAW_FILE_PATH = RAW_DIR / RAW_FILE_NAME
 KAGGLE_DATASET_SLUG = "nicapotato/womens-ecommerce-clothing-reviews"
 KAGGLE_DATASET_URL = "https://www.kaggle.com/datasets/nicapotato/womens-ecommerce-clothing-reviews/data"
 
+# Default supervised label for this teaching dataset (binary classification).
 TARGET_COLUMN = "Recommended IND"
 ID_COLUMN = "Clothing ID"
 
+# Feature groups drive `src/features.py` ColumnTransformer definitions.
 TEXT_COLUMNS = ["Title", "Review Text"]
 NUMERIC_COLUMNS = ["Age", "Positive Feedback Count", "Rating"]
 CATEGORICAL_COLUMNS = ["Division Name", "Department Name", "Class Name"]
@@ -25,5 +34,6 @@ TEST_SIZE = 0.2
 
 
 def ensure_dirs() -> None:
+    """Create on-disk folders so scripts never fail on first write."""
     for path in [DATA_DIR, RAW_DIR, PROCESSED_DIR, SUBMISSIONS_DIR, MODELS_DIR, LOGS_DIR]:
         path.mkdir(parents=True, exist_ok=True)

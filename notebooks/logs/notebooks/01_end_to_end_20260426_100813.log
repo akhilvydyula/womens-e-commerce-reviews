@@ -1,0 +1,14 @@
+2026-04-26 10:08:13,212 | INFO | START: load_and_clean_data
+2026-04-26 10:08:13,317 | INFO | END: load_and_clean_data | elapsed=0.11s
+2026-04-26 10:08:13,521 | INFO | START: feature_engineering_and_split
+2026-04-26 10:08:13,570 | INFO | END: feature_engineering_and_split | elapsed=0.05s
+2026-04-26 10:08:13,570 | INFO | START: train_baseline_model
+2026-04-26 10:08:13,693 | INFO | END: train_baseline_model | elapsed=0.12s
+2026-04-26 10:08:13,693 | INFO | START: evaluate_baseline_model
+2026-04-26 10:08:13,708 | INFO | END: evaluate_baseline_model | elapsed=0.02s
+2026-04-26 10:08:13,709 | INFO | baseline_metrics={'accuracy': 0.9367816091954023, 'f1': 0.960489557004124, 'roc_auc': 0.97215375100175}
+2026-04-26 10:08:13,718 | INFO | START: train_better_model
+2026-04-26 10:08:16,129 | INFO | END: train_better_model | elapsed=2.41s
+2026-04-26 10:08:16,130 | INFO | START: evaluate_better_model
+2026-04-26 10:08:16,595 | INFO | END: evaluate_better_model | elapsed=0.46s
+2026-04-26 10:08:16,596 | INFO | better_metrics={'accuracy': 0.9386973180076629, 'f1': 0.9618037135278514, 'roc_auc': 0.9780039713480106}

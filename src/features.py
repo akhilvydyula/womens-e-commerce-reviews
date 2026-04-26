@@ -10,6 +10,7 @@ from src.config import CATEGORICAL_COLUMNS, NUMERIC_COLUMNS
 
 
 def build_tabular_preprocessor() -> ColumnTransformer:
+    # Median imputation + scaling is a practical baseline for mixed numeric quality.
     num_pipe = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="median")),
@@ -17,6 +18,7 @@ def build_tabular_preprocessor() -> ColumnTransformer:
         ]
     )
 
+    # OHE with unknown handling is robust for real-world category drift.
     cat_pipe = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
@@ -35,18 +37,21 @@ def build_tabular_preprocessor() -> ColumnTransformer:
 
 
 def build_text_tabular_preprocessor(text_col: str = "text") -> ColumnTransformer:
+    # Reuse the same numeric pipeline for consistency across model tiers.
     num_pipe = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="median")),
             ("scaler", StandardScaler(with_mean=False)),
         ]
     )
+    # Reuse the same categorical strategy for deterministic training behavior.
     cat_pipe = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
             ("ohe", OneHotEncoder(handle_unknown="ignore")),
         ]
     )
+    # TF-IDF gives an interpretable and strong baseline for review text.
     text_pipe = Pipeline(
         steps=[
             (

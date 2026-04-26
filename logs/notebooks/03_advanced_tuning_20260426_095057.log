@@ -1,0 +1,23 @@
+2026-04-26 09:50:57,043 | INFO | GPU detected and enabled for XGBoost.
+2026-04-26 09:50:57,051 | INFO | START: load_clean_split_data
+2026-04-26 09:50:57,241 | INFO | END: load_clean_split_data | elapsed=0.19s
+2026-04-26 09:50:57,241 | INFO | train_shape=(18788, 11) valid_shape=(4698, 11)
+2026-04-26 09:50:57,250 | INFO | START: baseline_cv_score
+2026-04-26 09:52:35,153 | INFO | END: baseline_cv_score | elapsed=97.90s
+2026-04-26 09:52:35,154 | INFO | base_cv_f1_mean=0.963479 base_cv_f1_std=0.001063
+2026-04-26 09:52:35,302 | INFO | START: optuna_tuning
+2026-04-26 09:54:49,720 | INFO | trial=0 score=0.962734 params={'n_estimators': 500, 'max_depth': 10, 'learning_rate': 0.10200398102325207, 'subsample': 0.7800270701487998, 'colsample_bytree': 0.8467945139801369}
+2026-04-26 09:59:08,991 | INFO | trial=1 score=0.963704 params={'n_estimators': 700, 'max_depth': 13, 'learning_rate': 0.04124486360468805, 'subsample': 0.8191816478021546, 'colsample_bytree': 0.9417612867892543}
+2026-04-26 10:00:33,319 | INFO | trial=2 score=0.963571 params={'n_estimators': 200, 'max_depth': 13, 'learning_rate': 0.16220633285520925, 'subsample': 0.9306818925354459, 'colsample_bytree': 0.9308497581695124}
+2026-04-26 10:04:02,486 | INFO | trial=3 score=0.963521 params={'n_estimators': 600, 'max_depth': 12, 'learning_rate': 0.04686745843084255, 'subsample': 0.7955819596043154, 'colsample_bytree': 0.9303201249516021}
+2026-04-26 10:04:44,968 | INFO | trial=4 score=0.963537 params={'n_estimators': 200, 'max_depth': 6, 'learning_rate': 0.10964889124333516, 'subsample': 0.8887612683345132, 'colsample_bytree': 0.870292779022003}
+2026-04-26 10:06:37,810 | INFO | trial=5 score=0.963615 params={'n_estimators': 700, 'max_depth': 6, 'learning_rate': 0.06040301582997836, 'subsample': 0.9495395895663824, 'colsample_bytree': 0.8000459520788155}
+2026-04-26 10:08:38,016 | INFO | trial=6 score=0.964243 params={'n_estimators': 700, 'max_depth': 6, 'learning_rate': 0.036327316614859356, 'subsample': 0.7462333553162644, 'colsample_bytree': 0.904679053248568}
+2026-04-26 10:11:16,508 | INFO | trial=7 score=0.963120 params={'n_estimators': 600, 'max_depth': 9, 'learning_rate': 0.10490147858850586, 'subsample': 0.8107227794872247, 'colsample_bytree': 0.8748933624191371}
+2026-04-26 10:14:02,069 | INFO | trial=8 score=0.963225 params={'n_estimators': 500, 'max_depth': 11, 'learning_rate': 0.058864424095782596, 'subsample': 0.8754430762474479, 'colsample_bytree': 0.8876674006264803}
+2026-04-26 10:15:31,845 | INFO | trial=9 score=0.963652 params={'n_estimators': 500, 'max_depth': 6, 'learning_rate': 0.030814131467222464, 'subsample': 0.9984435946638428, 'colsample_bytree': 0.807995197961255}
+2026-04-26 10:15:31,846 | INFO | END: optuna_tuning | elapsed=1376.54s
+2026-04-26 10:15:31,846 | INFO | best_score=0.964243 best_params={'n_estimators': 700, 'max_depth': 6, 'learning_rate': 0.036327316614859356, 'subsample': 0.7462333553162644, 'colsample_bytree': 0.904679053248568}
+2026-04-26 10:15:31,857 | INFO | START: write_experiment_record
+2026-04-26 10:15:31,858 | INFO | END: write_experiment_record | elapsed=0.00s
+2026-04-26 10:15:31,858 | INFO | experiment_record={'timestamp': '2026-04-26T10:15:31', 'dataset_rows': 23486, 'target': 'Recommended IND', 'model': 'XGBClassifier + TFIDF + tabular', 'accelerator': {'tree_method': 'hist', 'device': 'cuda'}, 'best_f1_cv': 0.9642432336233439, 'best_params': {'n_estimators': 700, 'max_depth': 6, 'learning_rate': 0.036327316614859356, 'subsample': 0.7462333553162644, 'colsample_bytree': 0.904679053248568}, 'notebook_log_file': 'C:\\Users\\akhil\\OneDrive\\Documents\\ML Kaggle DS Projects\\womens-e-commerce-reviews\\logs\\notebooks\\03_advanced_tuning_20260426_095057.log'}

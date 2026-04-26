@@ -1,25 +1,138 @@
+"""
+Training entrypoint for teaching + production-like workflows.
+
+Flow (matches how many teams work):
+  1) Load and clean data
+  2) Holdout split for final offline metrics
+  3) Optional cross-validation on the *training* split for stability estimates
+  4) Fit the final model on the full training split
+  5) Report metrics on the holdout validation split
+  6) Save a joblib artifact for batch inference and the FastAPI service
+
+Use `--cv-f1` to log stratified K-fold F1 on `X_train` (mean + std).
+Use `--mlflow` to send params/metrics/artifact to MLflow (Databricks or local `mlruns`).
+"""
 from __future__ import annotations
 
 import argparse
+import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict, Optional
 
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.base import clone
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, classification_report, f1_score, roc_auc_score
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    f1_score,
+    log_loss,
+    roc_auc_score,
+)
+from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.pipeline import Pipeline
 
-from src.config import LOGS_DIR, MODELS_DIR, RAW_FILE_PATH, SUBMISSIONS_DIR, TARGET_COLUMN, ensure_dirs
+from src.config import (
+    LOGS_DIR,
+    MODELS_DIR,
+    PROCESSED_DIR,
+    RANDOM_STATE,
+    RAW_FILE_PATH,
+    SUBMISSIONS_DIR,
+    TARGET_COLUMN,
+    ensure_dirs,
+)
 from src.data import basic_cleaning, load_raw_data, make_text_feature, split_data
 from src.download_data import download_dataset
 from src.features import build_tabular_preprocessor, build_text_tabular_preprocessor
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _xgb_device_kwargs() -> Dict[str, str]:
+    """Prefer GPU if XGBoost can run a tiny fit; otherwise CPU (portable classrooms)."""
+    try:
+        from xgboost import XGBClassifier
+
+        probe = XGBClassifier(
+            n_estimators=1,
+            eval_metric="logloss",
+            tree_method="hist",
+            device="cuda",
+        )
+        probe.fit(np.array([[0.0], [1.0]], dtype=np.float32), np.array([0, 1]))
+        return {"tree_method": "hist", "device": "cuda"}
+    except Exception:
+        return {"tree_method": "hist", "device": "cpu"}
+
+
+def cross_val_f1_report(
+    pipeline: Pipeline, X_train: pd.DataFrame, y_train: pd.Series, n_splits: int
+) -> Dict[str, Any]:
+    """
+    Stratified K-fold F1 on the training split only.
+
+    Why train-only CV?
+    - The holdout `X_valid` must remain untouched until final reporting.
+    - Mean/std across folds gives students a sense of variance vs a single split.
+    """
+    cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
+    scores = cross_val_score(
+        clone(pipeline), X_train, y_train, cv=cv, scoring="f1", n_jobs=1
+    )
+    return {
+        "mean": float(scores.mean()),
+        "std": float(scores.std()),
+        "folds": [float(x) for x in scores],
+        "n_splits": n_splits,
+    }
+
+
+def persist_cv_report(model_name: str, report: Dict[str, Any]) -> Path:
+    """Write CV summary next to other processed artifacts (easy to diff across runs)."""
+    ensure_dirs()
+    out_dir = PROCESSED_DIR / "cv_reports"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"cv_f1_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    out_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    return out_path
+
+
+def mlflow_log_run(
+    args: argparse.Namespace,
+    *,
+    train_params: Dict[str, Any],
+    val_metrics: Dict[str, float],
+    cv_report: Optional[Dict[str, Any]],
+    model_path: Path,
+) -> None:
+    """Optional MLflow tracking (local file store or Databricks tracking URI)."""
+    if not args.mlflow:
+        return
+    import mlflow
+
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns")
+    mlflow.set_tracking_uri(tracking_uri)
+    experiment = (
+        args.mlflow_experiment
+        or os.environ.get("MLFLOW_EXPERIMENT", "womens-ecommerce-reviews")
+    )
+    mlflow.set_experiment(experiment)
+
+    with mlflow.start_run():
+        mlflow.log_params({k: str(v) for k, v in train_params.items()})
+        for name, value in val_metrics.items():
+            mlflow.log_metric(f"val_{name}", float(value))
+        if cv_report is not None:
+            mlflow.log_metric("cv_f1_mean", cv_report["mean"])
+            mlflow.log_metric("cv_f1_std", cv_report["std"])
+        mlflow.log_artifact(str(model_path))
 
 
 def setup_logging(model_name: str) -> Path:
@@ -48,12 +161,14 @@ def setup_logging(model_name: str) -> Path:
 
 
 def get_model_pipeline(model_type: str) -> Pipeline:
+    # Baseline is intentionally simple for teaching and fast iteration.
     if model_type == "baseline":
         preprocessor = build_tabular_preprocessor()
         model = LogisticRegression(max_iter=1000, class_weight="balanced")
         return Pipeline([("prep", preprocessor), ("model", model)])
 
     if model_type == "better":
+        # Better model combines text with tabular/categorical context.
         preprocessor = build_text_tabular_preprocessor(text_col="text")
         model = LogisticRegression(
             C=2.0, max_iter=2000, class_weight="balanced", solver="liblinear"
@@ -61,6 +176,7 @@ def get_model_pipeline(model_type: str) -> Pipeline:
         return Pipeline([("prep", preprocessor), ("model", model)])
 
     if model_type == "advanced":
+        # Advanced tier prioritizes non-linear interactions across mixed features.
         preprocessor = build_text_tabular_preprocessor(text_col="text")
         model = RandomForestClassifier(
             n_estimators=400,
@@ -72,14 +188,39 @@ def get_model_pipeline(model_type: str) -> Pipeline:
         )
         return Pipeline([("prep", preprocessor), ("model", model)])
 
+    if model_type == "advanced_xgb":
+        # Strong default for tabular + sparse text: gradient boosting on tree_method hist.
+        try:
+            from xgboost import XGBClassifier
+        except ImportError as exc:
+            raise ImportError(
+                "The 'advanced_xgb' model requires xgboost. Install with: pip install xgboost"
+            ) from exc
+
+        preprocessor = build_text_tabular_preprocessor(text_col="text")
+        model = XGBClassifier(
+            n_estimators=500,
+            max_depth=8,
+            learning_rate=0.08,
+            subsample=0.9,
+            colsample_bytree=0.9,
+            random_state=RANDOM_STATE,
+            eval_metric="logloss",
+            **_xgb_device_kwargs(),
+        )
+        return Pipeline([("prep", preprocessor), ("model", model)])
+
     raise ValueError(f"Unknown model_type: {model_type}")
 
 
 def evaluate_binary(y_true: pd.Series, y_pred: np.ndarray, y_proba: np.ndarray) -> Dict[str, float]:
+    # log_loss uses predicted probability of the positive class (binary).
+    proba = np.clip(np.asarray(y_proba, dtype=float), 1e-15, 1.0 - 1e-15)
     metrics = {
         "accuracy": accuracy_score(y_true, y_pred),
         "f1": f1_score(y_true, y_pred),
         "roc_auc": roc_auc_score(y_true, y_proba),
+        "log_loss": float(log_loss(y_true, proba)),
     }
     return metrics
 
@@ -98,12 +239,12 @@ def print_metrics(metrics: Dict[str, float], y_true: pd.Series, y_pred: np.ndarr
 def maybe_tune_advanced(pipeline: Pipeline, X_train: pd.DataFrame, y_train: pd.Series) -> Pipeline:
     try:
         import optuna
-        from sklearn.model_selection import StratifiedKFold, cross_val_score
     except Exception:
         print("Optuna not installed or unavailable; skipping tuning.")
         return pipeline
 
     def objective(trial):
+        # Keep search-space small for classroom runtime constraints.
         candidate = Pipeline(
             steps=[
                 ("prep", build_text_tabular_preprocessor(text_col="text")),
@@ -120,7 +261,7 @@ def maybe_tune_advanced(pipeline: Pipeline, X_train: pd.DataFrame, y_train: pd.S
                 ),
             ]
         )
-        cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
+        cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)
         score = cross_val_score(candidate, X_train, y_train, cv=cv, scoring="f1", n_jobs=1).mean()
         return score
 
@@ -190,17 +331,42 @@ def run(args: argparse.Namespace) -> None:
     )
 
     pipeline = get_model_pipeline(args.model)
+    # Optuna tuning is implemented for RandomForest advanced tier only (classroom runtime).
     if args.model == "advanced" and args.tune:
         LOGGER.info("Running lightweight tuning for advanced model.")
         pipeline = maybe_tune_advanced(pipeline, X_train, y_train)
+
+    cv_report: Optional[Dict[str, Any]] = None
+    if args.cv_f1:
+        LOGGER.info("Running %s-fold CV (F1) on training split...", args.cv_splits)
+        cv_report = cross_val_f1_report(
+            pipeline, X_train, y_train, n_splits=args.cv_splits
+        )
+        LOGGER.info(
+            "CV F1 mean=%.4f std=%.4f folds=%s",
+            cv_report["mean"],
+            cv_report["std"],
+            cv_report["folds"],
+        )
+        print(
+            f"\nCV F1 (train split only): mean={cv_report['mean']:.4f} "
+            f"std={cv_report['std']:.4f} folds={cv_report['folds']}"
+        )
+        cv_path = persist_cv_report(args.model, cv_report)
+        LOGGER.info("Wrote CV report JSON to: %s", cv_path)
 
     LOGGER.info("Training model: %s", args.model)
     pipeline.fit(X_train, y_train)
     LOGGER.info("Training complete.")
 
     y_pred = pipeline.predict(X_valid)
+    # Some estimators return a single-column proba matrix; handle both shapes.
     if hasattr(pipeline[-1], "predict_proba"):
-        y_proba = pipeline.predict_proba(X_valid)[:, 1]
+        proba = pipeline.predict_proba(X_valid)
+        if proba.shape[1] >= 2:
+            y_proba = proba[:, 1]
+        else:
+            y_proba = proba[:, 0]
     else:
         y_proba = y_pred
 
@@ -211,6 +377,22 @@ def run(args: argparse.Namespace) -> None:
     model_path = MODELS_DIR / f"{args.model}_pipeline.joblib"
     joblib.dump(pipeline, model_path)
     LOGGER.info("Saved model to: %s", model_path)
+
+    train_params = {
+        "model": args.model,
+        "tune": args.tune,
+        "cv_splits": args.cv_splits,
+        "cv_f1": args.cv_f1,
+        "random_state": RANDOM_STATE,
+        "raw_file": str(RAW_FILE_PATH),
+    }
+    mlflow_log_run(
+        args,
+        train_params=train_params,
+        val_metrics=metrics,
+        cv_report=cv_report,
+        model_path=model_path,
+    )
 
     if args.make_submission:
         sub_path = make_submission_file(pipeline, df.drop(columns=[TARGET_COLUMN]), args.model)
@@ -225,7 +407,7 @@ def parse_args() -> argparse.Namespace:
         "--model",
         type=str,
         default="baseline",
-        choices=["baseline", "better", "advanced"],
+        choices=["baseline", "better", "advanced", "advanced_xgb"],
         help="Model complexity level for teaching progression.",
     )
     parser.add_argument(
@@ -248,6 +430,28 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="nicapotato/womens-ecommerce-clothing-reviews",
         help="Kaggle dataset slug for direct download.",
+    )
+    parser.add_argument(
+        "--cv-f1",
+        action="store_true",
+        help="Run stratified K-fold F1 on the training split (mean/std printed + JSON report).",
+    )
+    parser.add_argument(
+        "--cv-splits",
+        type=int,
+        default=3,
+        help="Number of CV folds when --cv-f1 is set.",
+    )
+    parser.add_argument(
+        "--mlflow",
+        action="store_true",
+        help="Log params, metrics, and model artifact to MLflow (tracking URI from env).",
+    )
+    parser.add_argument(
+        "--mlflow-experiment",
+        type=str,
+        default=None,
+        help="MLflow experiment name (else MLFLOW_EXPERIMENT env or default).",
     )
     return parser.parse_args()
 

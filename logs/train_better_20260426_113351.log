@@ -1,0 +1,15 @@
+2026-04-26 11:33:51,886 | INFO | __main__ | Starting training run with args: {'model': 'better', 'tune': False, 'make_submission': False, 'download_data': False, 'dataset_slug': 'nicapotato/womens-ecommerce-clothing-reviews', 'cv_f1': True, 'cv_splits': 3, 'mlflow': False, 'mlflow_experiment': None}
+2026-04-26 11:33:51,887 | INFO | __main__ | Logs will be written to: C:\Users\akhil\OneDrive\Documents\ML Kaggle DS Projects\womens-e-commerce-reviews\logs\train_better_20260426_113351.log
+2026-04-26 11:33:51,887 | INFO | __main__ | Loading data from: C:\Users\akhil\OneDrive\Documents\ML Kaggle DS Projects\womens-e-commerce-reviews\data\raw\Womens Clothing E-Commerce Reviews.csv
+2026-04-26 11:33:51,995 | DEBUG | __main__ | Raw dataset shape: (23486, 11)
+2026-04-26 11:33:52,025 | DEBUG | __main__ | Post-cleaning dataset shape: (23486, 11)
+2026-04-26 11:33:52,040 | DEBUG | __main__ | Text feature generated.
+2026-04-26 11:33:52,063 | INFO | __main__ | Split complete: train_rows=18788, valid_rows=4698
+2026-04-26 11:33:52,064 | INFO | __main__ | Running 3-fold CV (F1) on training split...
+2026-04-26 11:33:57,161 | INFO | __main__ | CV F1 mean=0.9612 std=0.0009 folds=[0.9624750499001996, 0.9604305790890063, 0.9605749076754168]
+2026-04-26 11:33:57,165 | INFO | __main__ | Wrote CV report JSON to: C:\Users\akhil\OneDrive\Documents\ML Kaggle DS Projects\womens-e-commerce-reviews\data\processed\cv_reports\cv_f1_better_20260426_113357.json
+2026-04-26 11:33:57,166 | INFO | __main__ | Training model: better
+2026-04-26 11:33:59,101 | INFO | __main__ | Training complete.
+2026-04-26 11:33:59,464 | INFO | __main__ | Validation metrics: {'accuracy': 0.9386973180076629, 'f1': 0.9618037135278514, 'roc_auc': 0.9780024212512071, 'log_loss': 0.16157351264371475}
+2026-04-26 11:33:59,751 | INFO | __main__ | Saved model to: C:\Users\akhil\OneDrive\Documents\ML Kaggle DS Projects\womens-e-commerce-reviews\models\better_pipeline.joblib
+2026-04-26 11:33:59,752 | INFO | __main__ | Run completed successfully.

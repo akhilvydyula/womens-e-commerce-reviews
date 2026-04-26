@@ -1,0 +1,7 @@
+2026-04-26 11:34:04,189 | INFO | __main__ | Starting training run with args: {'model': 'advanced_xgb', 'tune': False, 'make_submission': False, 'download_data': False, 'dataset_slug': 'nicapotato/womens-ecommerce-clothing-reviews', 'cv_f1': True, 'cv_splits': 3, 'mlflow': False, 'mlflow_experiment': None}
+2026-04-26 11:34:04,189 | INFO | __main__ | Logs will be written to: C:\Users\akhil\OneDrive\Documents\ML Kaggle DS Projects\womens-e-commerce-reviews\logs\train_advanced_xgb_20260426_113404.log
+2026-04-26 11:34:04,190 | INFO | __main__ | Loading data from: C:\Users\akhil\OneDrive\Documents\ML Kaggle DS Projects\womens-e-commerce-reviews\data\raw\Womens Clothing E-Commerce Reviews.csv
+2026-04-26 11:34:04,281 | DEBUG | __main__ | Raw dataset shape: (23486, 11)
+2026-04-26 11:34:04,302 | DEBUG | __main__ | Post-cleaning dataset shape: (23486, 11)
+2026-04-26 11:34:04,312 | DEBUG | __main__ | Text feature generated.
+2026-04-26 11:34:04,325 | INFO | __main__ | Split complete: train_rows=18788, valid_rows=4698

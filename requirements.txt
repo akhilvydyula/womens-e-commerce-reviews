@@ -13,3 +13,7 @@ optuna
 imbalanced-learn
 kaggle
 kagglehub
+fastapi
+uvicorn[standard]
+httpx
+mlflow
