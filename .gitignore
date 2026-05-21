@@ -1,7 +1,16 @@
+# Python
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Notebooks
 .ipynb_checkpoints/
+notebooks/logs/
+
+# Models & data (generated / large)
 models/*.joblib
 models/hf_recommender/
 !models/.gitkeep
@@ -11,6 +20,22 @@ data/processed/*
 data/submissions/*
 !data/processed/.gitkeep
 !data/submissions/.gitkeep
+
+# MLflow & logs
 mlruns/
 logs/*
 !logs/.gitkeep
+
+# Test & coverage
+.coverage
+htmlcov/
+coverage.xml
+
+# IDE & local tools
+.vscode/
+.idea/
+ruvector.db
+*.db
+
+# Empty CI folder placeholder (pipeline is .gitlab-ci.yml)
+.github/

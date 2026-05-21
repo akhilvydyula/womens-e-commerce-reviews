@@ -6,7 +6,7 @@ If you saw **0.9387** in the **`/ui` playground**, that value is **`score` = P(r
 
 ## What “99% accuracy” really means here
 
-On this dataset, **strong classical models already land in the mid‑high 90s** for accuracy on a **single random 80/20 stratified split** (see `docs/STUDENT_ASSIGNMENTS_AND_BASELINES.md`). Moving from, say, **96% → 99%** may or may not be realistic because:
+On this dataset, **strong classical models already land in the mid‑high 90s** for accuracy on a **single random 80/20 stratified split** (see `docs/GENERALIZATION_AND_ACCURACY.md`). Moving from, say, **96% → 99%** may or may not be realistic because:
 
 - Some errors are **inherent label noise** (ambiguous reviews).
 - **Accuracy** can look “good enough” while hiding poor performance on the minority class—watch **F1** and the confusion matrix too.

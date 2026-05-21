@@ -5,7 +5,7 @@ Primary focus: `better` pipeline (TF-IDF + LogisticRegression) — linear weight
 map directly to log-odds contributions and are easy to discuss with business.
 
 Tree/boosting models: use permutation importance or SHAP in a notebook for deeper dives
-(see docs/ML_PRODUCT_RAW_TO_PRODUCTION.md).
+(use permutation importance or SHAP in a notebook for tree/boosting models).
 """
 from __future__ import annotations
 

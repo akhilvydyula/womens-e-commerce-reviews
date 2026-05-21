@@ -69,7 +69,7 @@ On many real problems—including text and ratings—**99% accuracy** is either:
 - A **red flag** for **data leakage** (accidentally letting the model see information that would not be available in production), or
 - **Misleading** because **accuracy** is inflated when one class dominates (a naive “always predict majority” baseline can look very accurate while being useless).
 
-This dataset is already in a range where strong baselines score high on F1/ROC-AUC (see `docs/STUDENT_ASSIGNMENTS_AND_BASELINES.md`). Pushing a few more points is possible with careful tuning, but **the teaching goal** is to pair any headline number with:
+This dataset is already in a range where strong baselines score high on F1/ROC-AUC. Pushing a few more points is possible with careful tuning, but **the goal** is to pair any headline number with:
 
 - **Holdout** performance (not just training),
 - **Calibration** (do predicted probabilities match reality?—see log-loss in training output),
@@ -92,7 +92,6 @@ not to fixate on a round **99%** without context.
 
 ## 6) Where to read more in this repo
 
-- `docs/STUDENT_ASSIGNMENTS_AND_BASELINES.md` — benchmark table and integrity rules.
 - `docs/KPI_DEFINITIONS.md` — F1, ROC-AUC, precision, recall.
 - `docs/TRANSFORMER_AND_HIGH_ACCURACY.md` — optional GPU transformer fine-tune and XGBoost tuning (`make train-transformer`, `make train-xgb-tune`).
 - `docs/FAST_ITERATION_AND_SAMPLING.md` — stratified `--sample-frac` / `--max-rows`, `make train-quick`, and other speed tactics.
