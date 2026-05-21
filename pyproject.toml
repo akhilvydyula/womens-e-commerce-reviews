@@ -1,3 +1,0 @@
-[tool.bandit]
-exclude_dirs = ["tests", ".venv", ".git", "notebooks", "htmlcov", "mlruns"]
-skips = ["B101"]

@@ -1,6 +1,0 @@
-# CI-only installs: fast test deps + security / audit tools (no full Jupyter stack).
-# Used by GitHub Actions and GitLab CI.
--r requirements_train.txt
-coverage>=7.0
-bandit[toml]>=1.7.7
-pip-audit>=2.7.0

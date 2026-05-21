@@ -1,7 +1,0 @@
-# Transformer fine-tuning stack for src.train_transformer (optional; not required for sklearn baselines).
-# Install PyTorch with CUDA first (pick your CUDA version): https://pytorch.org/get-started/locally/
-#   Example: pip install torch --index-url https://download.pytorch.org/whl/cu124
-transformers>=4.38.0
-accelerate>=0.27.0
-datasets>=2.16.0
-evaluate>=0.4.0
