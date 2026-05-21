@@ -2,6 +2,12 @@
 
 This document defines **reproducible** benchmarks and homework-style challenges.
 
+## Interpreting numbers (accuracy vs probability vs generalization)
+
+- If you use the **`/ui` playground** or **`POST /predict`**, the **`score`** field is **P(recommended)** for that single row—not “accuracy.” **Accuracy** needs many labeled rows and compares predictions to true labels.
+- **Overfitting** means the model fits training noise: **train metrics much better than holdout**. **Underfitting** means both are weak. See **`docs/GENERALIZATION_AND_ACCURACY.md`** and run training with **`--fit-gap`** for a train vs holdout table.
+- A fixed **99%** target is not always meaningful; prefer **honest holdout + F1/ROC-AUC** and avoid **tuning on the holdout** (that makes the score optimistic). Use **`make train-debug`** (or **`--save-holdout-indices`**) to record which rows are your locked evaluation set.
+
 ## Metric definitions
 
 - **CV F1 (mean ± std)**: stratified K-fold F1 computed on the **training split only** (`--cv-f1`, default 3 folds). This estimates stability without touching the holdout set.

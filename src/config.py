@@ -13,6 +13,8 @@ RAW_DIR = DATA_DIR / "raw"
 PROCESSED_DIR = DATA_DIR / "processed"
 SUBMISSIONS_DIR = DATA_DIR / "submissions"
 MODELS_DIR = PROJECT_ROOT / "models"
+# Hugging Face fine-tune artifact directory (see src.train_transformer).
+HF_RECOMMENDER_DIR = MODELS_DIR / "hf_recommender"
 LOGS_DIR = PROJECT_ROOT / "logs"
 
 RAW_FILE_NAME = "Womens Clothing E-Commerce Reviews.csv"

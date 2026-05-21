@@ -92,6 +92,7 @@
       <strong>Why this page exists:</strong> An API does not include a built-in “app UI” by default.
       This form is a <em>client</em> of your API—just like Swagger (<code>/docs</code>), Python <code>requests</code>, or a mobile app.
       Open browser <strong>DevTools → Network</strong> after submitting to see the JSON request and response.
+      <strong>About the result:</strong> <code>score</code> is the model’s estimated <em>probability</em> for the “recommended” class on this one review—it is not the same thing as <em>accuracy</em> on a full labeled dataset (see <code>docs/GENERALIZATION_AND_ACCURACY.md</code>).
       <div class="links">
         <a href="/docs">OpenAPI / Swagger</a>
         <a href="/health">Health</a>
@@ -181,7 +182,7 @@
 
         if (res.ok) {
           const score = typeof data.score === "number" ? data.score.toFixed(4) : data.score;
-          show(out, "ok", "HTTP " + res.status + "\n\nprediction (class): " + data.prediction + "\nscore (probability of positive class): " + score);
+          show(out, "ok", "HTTP " + res.status + "\n\nprediction (class): " + data.prediction + "\nscore (P(recommended) for this row, not dataset accuracy): " + score);
         } else {
           show(out, "bad", "HTTP " + res.status + "\n\n" + (typeof data === "object" ? JSON.stringify(data, null, 2) : String(data)));
         }

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import Tuple
+from typing import Optional, Tuple
 
+import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
@@ -47,6 +48,59 @@ def basic_cleaning(df: pd.DataFrame) -> pd.DataFrame:
 def make_text_feature(df: pd.DataFrame) -> pd.Series:
     # Single text field keeps feature pipelines simpler and reproducible.
     return (df["Title"] + " " + df["Review Text"]).str.strip()
+
+
+def stratified_subsample(
+    df: pd.DataFrame,
+    *,
+    target_column: str = TARGET_COLUMN,
+    sample_frac: Optional[float] = None,
+    max_rows: Optional[int] = None,
+    random_state: int = RANDOM_STATE,
+) -> pd.DataFrame:
+    """
+    Draw a smaller stratified random subset for fast iteration (debug / classroom).
+
+    Preserves approximate class balance when sklearn stratified split succeeds.
+    If ``max_rows`` and ``sample_frac`` are both None, returns ``df`` unchanged.
+    If both are set, ``max_rows`` wins (and ``sample_frac`` is ignored).
+    """
+    if sample_frac is None and max_rows is None:
+        return df
+
+    y = df[target_column]
+    n_total = len(df)
+    if n_total < 2:
+        return df
+
+    if max_rows is not None:
+        n = min(int(max_rows), n_total)
+    else:
+        assert sample_frac is not None
+        if sample_frac >= 1.0:
+            return df
+        if sample_frac <= 0.0:
+            raise ValueError("sample_frac must be in (0, 1) when provided")
+        n = max(2, int(n_total * sample_frac))
+
+    if n < 2:
+        return df
+
+    idx = np.arange(n_total)
+    try:
+        keep_idx, _ = train_test_split(
+            idx,
+            train_size=n,
+            stratify=y,
+            random_state=random_state,
+        )
+    except ValueError:
+        # Too few rows per class for stratify — fall back to simple random rows.
+        return df.sample(n=min(n, n_total), random_state=random_state).reset_index(
+            drop=True
+        )
+
+    return df.iloc[keep_idx].reset_index(drop=True)
 
 
 def split_data(

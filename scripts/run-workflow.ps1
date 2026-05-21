@@ -9,7 +9,7 @@ param(
     [Parameter(Position = 0)]
     [ValidateSet(
         "setup", "quickstart", "check", "check-cov", "ci-local", "install", "install-train", "install-dev",
-        "validate", "etl", "explain", "train-baseline", "train-better", "train-advanced", "train-xgb", "train-all",
+        "install-transformer", "validate", "etl", "explain", "train-baseline", "train-better", "train-advanced", "train-xgb", "train-lgbm", "train-ensemble", "train-xgb-tune", "train-debug", "train-quick", "train-transformer", "train-all", "leaderboard-fast",
         "test", "test-cov", "inference", "api", "mlflow-better", "download-better", "help"
     )]
     [string]$Command = "help"
@@ -56,6 +56,7 @@ switch ($Command) {
     "install" { Invoke-Py @("-m", "pip", "install", "-r", "requirements.txt") }
     "install-train" { Invoke-Py @("-m", "pip", "install", "-r", "requirements_train.txt") }
     "install-dev" { Invoke-Py @("-m", "pip", "install", "-r", "requirements-dev.txt") }
+    "install-transformer" { Invoke-Py @("-m", "pip", "install", "-r", "requirements-transformers.txt") }
     "validate" { Invoke-Py @("-m", "src.pipeline.validate") }
     "etl" { Invoke-Py @("-m", "src.pipeline.etl") }
     "explain" { Invoke-Py @("-m", "src.interpretability") }
@@ -63,11 +64,37 @@ switch ($Command) {
     "train-better" { Invoke-Py @("-m", "src.train", "--model", "better", "--cv-f1") }
     "train-advanced" { Invoke-Py @("-m", "src.train", "--model", "advanced", "--cv-f1") }
     "train-xgb" { Invoke-Py @("-m", "src.train", "--model", "advanced_xgb", "--cv-f1") }
+    "train-lgbm" { Invoke-Py @("-m", "src.train", "--model", "advanced_lgbm", "--cv-f1") }
+    "train-ensemble" { Invoke-Py @("-m", "src.train", "--model", "ultra_ensemble", "--cv-f1") }
+    "train-xgb-tune" {
+        $t = if ($env:TUNE_XGB_TRIALS) { $env:TUNE_XGB_TRIALS } else { "16" }
+        Invoke-Py @(
+            "-m", "src.train", "--model", "advanced_xgb", "--cv-f1", "--tune-xgb", "--tune-xgb-trials", $t
+        )
+    }
+    "train-debug" {
+        $m = if ($env:MODEL) { $env:MODEL } else { "better" }
+        Invoke-Py @(
+            "-m", "src.train", "--model", $m, "--cv-f1", "--fit-gap", "--save-holdout-indices"
+        )
+    }
+    "train-quick" {
+        Invoke-Py @(
+            "-m", "src.train", "--model", "better", "--sample-frac", "0.25", "--cv-f1", "--cv-splits", "2"
+        )
+    }
+    "leaderboard-fast" { Invoke-Py @("-m", "src.evaluate_saved_models") }
+    "train-transformer" {
+        Invoke-Py @("-m", "pip", "install", "-r", "requirements-transformers.txt")
+        Invoke-Py @("-m", "src.train_transformer")
+    }
     "train-all" {
         Invoke-Py @("-m", "src.train", "--model", "baseline", "--cv-f1")
         Invoke-Py @("-m", "src.train", "--model", "better", "--cv-f1")
         Invoke-Py @("-m", "src.train", "--model", "advanced", "--cv-f1")
         Invoke-Py @("-m", "src.train", "--model", "advanced_xgb", "--cv-f1")
+        Invoke-Py @("-m", "src.train", "--model", "advanced_lgbm", "--cv-f1")
+        Invoke-Py @("-m", "src.train", "--model", "ultra_ensemble", "--cv-f1")
     }
     "test" { Invoke-Py @("-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py") }
     "test-cov" {
@@ -89,6 +116,6 @@ switch ($Command) {
     "help" {
         Write-Host "Usage: .\scripts\run-workflow.ps1 <command>"
         Write-Host "Common: setup, quickstart, check, check-cov, ci-local, install-dev, etl, explain, train-all"
-        Write-Host "Also: install, install-train, validate, train-*, test, test-cov, inference, api, mlflow-better, download-better"
+        Write-Host "Also: install, install-train, install-transformer, validate, train-*, train-lgbm, train-ensemble, train-xgb-tune, train-debug, train-quick, train-transformer, leaderboard-fast, test, test-cov, inference, api, mlflow-better, download-better"
     }
 }

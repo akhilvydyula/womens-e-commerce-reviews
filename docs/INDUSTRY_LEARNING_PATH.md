@@ -101,6 +101,10 @@ Teach students that baseline models are essential.
 - Simple models are easier to debug.
 - Complexity should be justified by measurable gain.
 
+### Generalization (overfitting vs underfitting)
+
+- Read **`docs/GENERALIZATION_AND_ACCURACY.md`** for how this repo defines the holdout split, why API “score” is not accuracy, and how to use **`python -m src.train --fit-gap`** plus **`--save-holdout-indices`** for reproducible evaluation.
+
 ---
 
 ## 5) Experiment Tracking (MLOps Mindset)

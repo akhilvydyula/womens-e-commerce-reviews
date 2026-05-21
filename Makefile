@@ -14,6 +14,8 @@
 # Override Python:  make train-better PYTHON=.venv\Scripts\python
 #
 # Extra train flags:  make train-better TRAIN_EXTRA="--mlflow"
+# Student debugging:   make train-debug   (CV + train vs holdout + holdout JSON; MODEL=advanced_xgb optional)
+# High-accuracy path: make train-transformer  (after: pip install torch[cuda] + pip install -r requirements-transformers.txt)
 # =============================================================================
 
 .DEFAULT_GOAL := help
@@ -23,10 +25,11 @@ PIP := $(PYTHON) -m pip
 # Optional extra args for all train-* targets, e.g. TRAIN_EXTRA=--mlflow
 TRAIN_EXTRA ?=
 MODEL ?= better
+TUNE_XGB_TRIALS ?= 16
 
-.PHONY: help install install-train install-dev setup quickstart check check-cov ci-local \
-	validate etl explain train-baseline train-better train-advanced train-xgb \
-	train-all mlflow-better download-better test test-cov inference api databricks-help
+.PHONY: help install install-train install-dev install-transformer setup quickstart check check-cov ci-local \
+	validate etl explain train-baseline train-better train-advanced train-xgb train-lgbm train-ensemble train-xgb-tune \
+	train-debug train-quick train-transformer train-all leaderboard-fast mlflow-better download-better test test-cov inference api databricks-help
 
 help:
 	@echo ""
@@ -41,6 +44,7 @@ help:
 	@echo "  make install          - pip install -r requirements.txt"
 	@echo "  make install-train    - pip install -r requirements_train.txt (lighter; no Jupyter)"
 	@echo "  make install-dev      - pip install -r requirements-dev.txt (tests + coverage)"
+	@echo "  make install-transformer - install HF stack (requires torch installed separately)"
 	@echo ""
 	@echo "=== Data + train (each run writes models/<name>_pipeline.joblib) ==="
 	@echo "  make validate         - data quality JSON under data/processed/quality/"
@@ -49,7 +53,14 @@ help:
 	@echo "  make train-baseline   - baseline model + CV F1"
 	@echo "  make train-better     - TF-IDF + logistic + CV F1"
 	@echo "  make train-advanced   - RandomForest + CV F1"
-	@echo "  make train-xgb        - XGBoost + CV F1 (needs xgboost)"
+	@echo "  make train-xgb        - XGBoost + CV F1 (needs xgboost; uses GPU if XGBoost CUDA works)"
+	@echo "  make train-lgbm       - LightGBM + CV F1 (boosting; uses GPU if LightGBM GPU works)"
+	@echo "  make train-ensemble   - soft-voting blend (LogReg + XGB + LGBM) + CV F1"
+	@echo "  make train-xgb-tune   - XGBoost + Optuna tuning + CV F1 (longer; TUNE_XGB_TRIALS=$(TUNE_XGB_TRIALS))"
+	@echo "  make train-transformer - DistilBERT-class fine-tune (GPU; pip install torch + requirements-transformers.txt)"
+	@echo "  make train-debug      - student debug: CV F1 + train vs holdout table + save holdout JSON"
+	@echo "  make train-quick      - train better on 25%% rows + 2-fold CV (fast crux / debugging)"
+	@echo "  make leaderboard-fast - evaluate existing saved models only (no retraining)"
 	@echo "  make train-all        - baseline, better, advanced, xgb in order (long)"
 	@echo "  make download-better  - Kaggle download + train better"
 	@echo "  make mlflow-better    - train better + log to MLflow (--mlflow)"
@@ -59,14 +70,15 @@ help:
 	@echo "  make test-cov         - coverage + report (installs coverage if needed)"
 	@echo "  make ci-local          - pip-audit + bandit + tests (no gitleaks; run before push)"
 	@echo "  make inference        - score raw CSV (MODEL=$(MODEL) → models/$(MODEL)_pipeline.joblib)"
-	@echo "  make api              - http://127.0.0.1:8000  (set MODEL_PATH=... if not using better)"
+	@echo "  make api              - http://127.0.0.1:8000  (/ui form, /docs Swagger; MODEL_PATH=...)"
 	@echo ""
 	@echo "=== Docs ==="
 	@echo "  make databricks-help  - Databricks + MLflow pointer"
 	@echo ""
 	@echo "Optional environment variables:"
 	@echo "  TRAIN_EXTRA           - e.g. TRAIN_EXTRA=--mlflow"
-	@echo "  MODEL                 - for inference: better | baseline | advanced | advanced_xgb"
+	@echo "  TUNE_XGB_TRIALS       - for train-xgb-tune (default $(TUNE_XGB_TRIALS))"
+	@echo "  MODEL                 - for inference + train-debug: better | baseline | advanced | advanced_xgb | advanced_lgbm | ultra_ensemble"
 	@echo "  MLFLOW_TRACKING_URI   - e.g. file:./mlruns"
 	@echo "  MLFLOW_EXPERIMENT     - experiment name"
 	@echo "  MODEL_PATH            - for api default artifact (see src/api.py)"
@@ -80,6 +92,9 @@ install-train:
 
 install-dev:
 	$(PIP) install -r requirements-dev.txt
+
+install-transformer:
+	$(PIP) install -r requirements-transformers.txt
 
 # One-shot environment bootstrap (full stack).
 setup: install
@@ -112,8 +127,31 @@ train-advanced:
 train-xgb:
 	$(PYTHON) -m src.train --model advanced_xgb --cv-f1 $(TRAIN_EXTRA)
 
+train-lgbm:
+	$(PYTHON) -m src.train --model advanced_lgbm --cv-f1 $(TRAIN_EXTRA)
+
+train-ensemble:
+	$(PYTHON) -m src.train --model ultra_ensemble --cv-f1 $(TRAIN_EXTRA)
+
+train-xgb-tune:
+	$(PYTHON) -m src.train --model advanced_xgb --cv-f1 --tune-xgb --tune-xgb-trials $(TUNE_XGB_TRIALS) $(TRAIN_EXTRA)
+
+train-transformer: install-transformer
+	$(PYTHON) -m src.train_transformer
+
+# One-command student debugging: stratified CV on train split, final metrics on holdout,
+# train vs holdout gap (overfitting cue), and JSON of holdout row indices under data/processed/holdout_manifests/.
+train-debug:
+	$(PYTHON) -m src.train --model $(MODEL) --cv-f1 --fit-gap --save-holdout-indices $(TRAIN_EXTRA)
+
+train-quick:
+	$(PYTHON) -m src.train --model better --sample-frac 0.25 --cv-f1 --cv-splits 2 $(TRAIN_EXTRA)
+
+leaderboard-fast:
+	$(PYTHON) -m src.evaluate_saved_models
+
 # Train every tier in sequence (use for benchmarking / assignment baselines).
-train-all: train-baseline train-better train-advanced train-xgb
+train-all: train-baseline train-better train-advanced train-xgb train-lgbm train-ensemble
 
 mlflow-better:
 	$(PYTHON) -m src.train --model better --cv-f1 --mlflow

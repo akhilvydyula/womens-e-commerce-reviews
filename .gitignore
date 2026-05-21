@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 models/*.joblib
+models/hf_recommender/
 !models/.gitkeep
 data/raw/*.csv
 !data/raw/.gitkeep

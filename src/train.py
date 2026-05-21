@@ -10,8 +10,13 @@ Flow (matches how many teams work):
   6) Save a joblib artifact for batch inference and the FastAPI service
 
 Use `--cv-f1` to log stratified K-fold F1 on `X_train` (mean + std).
+Use `--fit-gap` to print train vs holdout metrics (overfitting / underfitting check).
+Use `--save-holdout-indices` to write which rows are in the holdout split (reproducible evaluation).
 Use `--mlflow` to send params/metrics/artifact to MLflow (Databricks or local `mlruns`).
 After `src.pipeline.etl`, you can pass `--data-path` to read `data/processed/clean_reviews.csv`.
+
+Use `--sample-frac` or `--max-rows` for stratified subsampling before the train/validation split
+(faster iteration while you debug pipelines; final runs should use full data).
 """
 from __future__ import annotations
 
@@ -20,7 +25,7 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -48,9 +53,16 @@ from src.config import (
     RAW_FILE_PATH,
     SUBMISSIONS_DIR,
     TARGET_COLUMN,
+    TEST_SIZE,
     ensure_dirs,
 )
-from src.data import basic_cleaning, load_raw_data, make_text_feature, split_data
+from src.data import (
+    basic_cleaning,
+    load_raw_data,
+    make_text_feature,
+    split_data,
+    stratified_subsample,
+)
 from src.download_data import download_dataset
 from src.features import build_tabular_preprocessor, build_text_tabular_preprocessor
 from src.pipeline.audit import append_audit_event
@@ -75,6 +87,28 @@ def _xgb_device_kwargs() -> Dict[str, str]:
         return {"tree_method": "hist", "device": "cpu"}
 
 
+def _lgbm_device_kwargs() -> Dict[str, str]:
+    """Prefer GPU for LightGBM when available; fallback to CPU."""
+    try:
+        from lightgbm import LGBMClassifier
+
+        probe = LGBMClassifier(
+            n_estimators=5,
+            max_depth=3,
+            learning_rate=0.1,
+            objective="binary",
+            random_state=RANDOM_STATE,
+            device_type="gpu",
+            verbosity=-1,
+        )
+        X_probe = np.array([[0.0], [1.0], [2.0], [3.0]], dtype=np.float32)
+        y_probe = np.array([0, 1, 0, 1], dtype=np.int32)
+        probe.fit(X_probe, y_probe)
+        return {"device_type": "gpu"}
+    except Exception:
+        return {"device_type": "cpu"}
+
+
 def cross_val_f1_report(
     pipeline: Pipeline, X_train: pd.DataFrame, y_train: pd.Series, n_splits: int
 ) -> Dict[str, Any]:
@@ -95,6 +129,42 @@ def cross_val_f1_report(
         "folds": [float(x) for x in scores],
         "n_splits": n_splits,
     }
+
+
+def persist_holdout_manifest(
+    data_path: Path,
+    X_train: pd.DataFrame,
+    X_valid: pd.DataFrame,
+    y_train: pd.Series,
+    y_valid: pd.Series,
+) -> Path:
+    """
+    Record which row indices belong to the stratified holdout for this run.
+
+    With the same cleaned dataframe order, RANDOM_STATE, and TEST_SIZE, the split
+    is reproducible; the manifest makes the "unseen" evaluation set explicit for
+    students and for re-scoring after model changes.
+    """
+    ensure_dirs()
+    out_dir = PROCESSED_DIR / "holdout_manifests"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    payload: Dict[str, Any] = {
+        "created_utc": datetime.now(timezone.utc).isoformat(),
+        "data_file": str(Path(data_path).resolve()),
+        "random_state": RANDOM_STATE,
+        "test_size": TEST_SIZE,
+        "stratify": TARGET_COLUMN,
+        "n_train": int(len(X_train)),
+        "n_valid": int(len(X_valid)),
+        "train_row_indices": [int(i) for i in X_train.index],
+        "valid_row_indices": [int(i) for i in X_valid.index],
+        "train_positive_rate": float(y_train.mean()),
+        "valid_positive_rate": float(y_valid.mean()),
+    }
+    out_path = out_dir / f"holdout_{stamp}.json"
+    out_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return out_path
 
 
 def persist_cv_report(model_name: str, report: Dict[str, Any]) -> Path:
@@ -213,6 +283,75 @@ def get_model_pipeline(model_type: str) -> Pipeline:
         )
         return Pipeline([("prep", preprocessor), ("model", model)])
 
+    if model_type == "advanced_lgbm":
+        # Gradient boosting baseline with LightGBM (GPU when available).
+        try:
+            from lightgbm import LGBMClassifier
+        except ImportError as exc:
+            raise ImportError(
+                "The 'advanced_lgbm' model requires lightgbm. Install with: pip install lightgbm"
+            ) from exc
+
+        preprocessor = build_text_tabular_preprocessor(text_col="text")
+        model = LGBMClassifier(
+            n_estimators=1200,
+            max_depth=-1,
+            num_leaves=127,
+            learning_rate=0.03,
+            subsample=0.9,
+            colsample_bytree=0.9,
+            objective="binary",
+            random_state=RANDOM_STATE,
+            verbosity=-1,
+            **_lgbm_device_kwargs(),
+        )
+        return Pipeline([("prep", preprocessor), ("model", model)])
+
+    if model_type == "ultra_ensemble":
+        # Soft-voting blend of linear + two boosting families on the same features.
+        try:
+            from lightgbm import LGBMClassifier
+            from sklearn.ensemble import VotingClassifier
+            from xgboost import XGBClassifier
+        except ImportError as exc:
+            raise ImportError(
+                "The 'ultra_ensemble' model requires xgboost and lightgbm."
+            ) from exc
+
+        preprocessor = build_text_tabular_preprocessor(text_col="text")
+        lr = LogisticRegression(
+            C=2.0, max_iter=2000, class_weight="balanced", solver="liblinear"
+        )
+        xgb = XGBClassifier(
+            n_estimators=900,
+            max_depth=8,
+            learning_rate=0.05,
+            subsample=0.9,
+            colsample_bytree=0.9,
+            random_state=RANDOM_STATE,
+            eval_metric="logloss",
+            **_xgb_device_kwargs(),
+        )
+        lgbm = LGBMClassifier(
+            n_estimators=900,
+            max_depth=-1,
+            num_leaves=127,
+            learning_rate=0.04,
+            subsample=0.9,
+            colsample_bytree=0.9,
+            objective="binary",
+            random_state=RANDOM_STATE,
+            verbosity=-1,
+            **_lgbm_device_kwargs(),
+        )
+        model = VotingClassifier(
+            estimators=[("lr", lr), ("xgb", xgb), ("lgbm", lgbm)],
+            voting="soft",
+            weights=[1, 2, 2],
+            n_jobs=1,
+        )
+        return Pipeline([("prep", preprocessor), ("model", model)])
+
     raise ValueError(f"Unknown model_type: {model_type}")
 
 
@@ -226,6 +365,34 @@ def evaluate_binary(y_true: pd.Series, y_pred: np.ndarray, y_proba: np.ndarray) 
         "log_loss": float(log_loss(y_true, proba)),
     }
     return metrics
+
+
+def positive_class_proba(pipeline: Pipeline, X: pd.DataFrame) -> np.ndarray:
+    """Probability of the positive class for binary classifiers; falls back to hard labels."""
+    model = pipeline[-1]
+    if hasattr(model, "predict_proba"):
+        proba = pipeline.predict_proba(X)
+        if proba.shape[1] >= 2:
+            return proba[:, 1]
+        return proba[:, 0]
+    return np.asarray(pipeline.predict(X), dtype=float)
+
+
+def print_train_vs_valid(
+    metrics_train: Dict[str, float], metrics_valid: Dict[str, float]
+) -> None:
+    """Side-by-side metrics to spot overfitting (train much better than holdout)."""
+    print("\nTrain vs holdout (generalization check)")
+    print("-" * 54)
+    print(f"{'metric':>12} {'train':>10} {'holdout':>10} {'gap':>10}")
+    for key in metrics_valid:
+        t, v = metrics_train[key], metrics_valid[key]
+        print(f"{key:>12} {t:10.4f} {v:10.4f} {t - v:10.4f}")
+    print(
+        "\nInterpretation: if train is much higher than holdout on F1/accuracy, "
+        "you may be overfitting. If both are low, you may be underfitting "
+        "(too simple a model or weak features). See docs/GENERALIZATION_AND_ACCURACY.md."
+    )
 
 
 def print_metrics(metrics: Dict[str, float], y_true: pd.Series, y_pred: np.ndarray) -> None:
@@ -292,6 +459,68 @@ def maybe_tune_advanced(pipeline: Pipeline, X_train: pd.DataFrame, y_train: pd.S
     return tuned
 
 
+def maybe_tune_xgb(
+    pipeline: Pipeline, X_train: pd.DataFrame, y_train: pd.Series, n_trials: int
+) -> Pipeline:
+    """Stratified CV hyperparameter search for XGBoost + TF-IDF/tabular pipeline."""
+    try:
+        import optuna
+        from xgboost import XGBClassifier
+    except Exception:
+        print("Optuna or XGBoost unavailable; skipping XGB tuning.")
+        return pipeline
+
+    device_kw = _xgb_device_kwargs()
+
+    def objective(trial) -> float:
+        prep = build_text_tabular_preprocessor(text_col="text")
+        model = XGBClassifier(
+            n_estimators=trial.suggest_int("n_estimators", 400, 1400, step=100),
+            max_depth=trial.suggest_int("max_depth", 4, 12),
+            learning_rate=trial.suggest_float("learning_rate", 0.02, 0.2, log=True),
+            subsample=trial.suggest_float("subsample", 0.65, 1.0),
+            colsample_bytree=trial.suggest_float("colsample_bytree", 0.65, 1.0),
+            min_child_weight=trial.suggest_int("min_child_weight", 1, 12),
+            reg_lambda=trial.suggest_float("reg_lambda", 1e-3, 16.0, log=True),
+            reg_alpha=trial.suggest_float("reg_alpha", 1e-8, 1.0, log=True),
+            random_state=RANDOM_STATE,
+            eval_metric="logloss",
+            **device_kw,
+        )
+        candidate = Pipeline([("prep", prep), ("model", model)])
+        cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)
+        return float(
+            cross_val_score(
+                candidate, X_train, y_train, cv=cv, scoring="f1", n_jobs=1
+            ).mean()
+        )
+
+    study = optuna.create_study(direction="maximize")
+    study.optimize(objective, n_trials=n_trials)
+    print("Best XGB tuning trial:", study.best_trial.params)
+
+    best = study.best_trial.params
+    tuned_model = XGBClassifier(
+        n_estimators=best["n_estimators"],
+        max_depth=best["max_depth"],
+        learning_rate=best["learning_rate"],
+        subsample=best["subsample"],
+        colsample_bytree=best["colsample_bytree"],
+        min_child_weight=best["min_child_weight"],
+        reg_lambda=best["reg_lambda"],
+        reg_alpha=best["reg_alpha"],
+        random_state=RANDOM_STATE,
+        eval_metric="logloss",
+        **device_kw,
+    )
+    return Pipeline(
+        [
+            ("prep", build_text_tabular_preprocessor(text_col="text")),
+            ("model", tuned_model),
+        ]
+    )
+
+
 def make_submission_file(model: Pipeline, source_df: pd.DataFrame, model_name: str) -> Path:
     inference_df = source_df.copy()
     inference_df["text"] = make_text_feature(inference_df)
@@ -335,16 +564,49 @@ def run(args: argparse.Namespace) -> None:
     df["text"] = make_text_feature(df)
     LOGGER.debug("Text feature generated.")
 
+    if args.max_rows is not None or args.sample_frac is not None:
+        if (
+            args.sample_frac is not None
+            and args.max_rows is None
+            and (args.sample_frac <= 0 or args.sample_frac > 1)
+        ):
+            raise ValueError("--sample-frac must be in (0, 1]")
+        n_before = len(df)
+        if args.max_rows is not None and args.sample_frac is not None:
+            LOGGER.warning(
+                "Both --max-rows and --sample-frac set; using --max-rows only."
+            )
+        df = stratified_subsample(
+            df,
+            sample_frac=None if args.max_rows is not None else args.sample_frac,
+            max_rows=args.max_rows,
+        )
+        LOGGER.info("Stratified subsample for speed: rows %s -> %s", n_before, len(df))
+
     X_train, X_valid, y_train, y_valid = split_data(df, TARGET_COLUMN)
     LOGGER.info(
         "Split complete: train_rows=%s, valid_rows=%s", len(X_train), len(X_valid)
     )
 
+    holdout_manifest_path: Optional[Path] = None
+    if args.save_holdout_indices:
+        holdout_manifest_path = persist_holdout_manifest(
+            data_path, X_train, X_valid, y_train, y_valid
+        )
+        LOGGER.info("Wrote holdout row index manifest to: %s", holdout_manifest_path)
+
     pipeline = get_model_pipeline(args.model)
-    # Optuna tuning is implemented for RandomForest advanced tier only (classroom runtime).
+    # Optuna tuning: RandomForest (advanced) or XGBoost (advanced_xgb).
     if args.model == "advanced" and args.tune:
         LOGGER.info("Running lightweight tuning for advanced model.")
         pipeline = maybe_tune_advanced(pipeline, X_train, y_train)
+    if args.model == "advanced_xgb" and args.tune_xgb:
+        LOGGER.info(
+            "Running Optuna tuning for advanced_xgb (%s trials).", args.tune_xgb_trials
+        )
+        pipeline = maybe_tune_xgb(
+            pipeline, X_train, y_train, n_trials=args.tune_xgb_trials
+        )
 
     cv_report: Optional[Dict[str, Any]] = None
     if args.cv_f1:
@@ -370,19 +632,18 @@ def run(args: argparse.Namespace) -> None:
     LOGGER.info("Training complete.")
 
     y_pred = pipeline.predict(X_valid)
-    # Some estimators return a single-column proba matrix; handle both shapes.
-    if hasattr(pipeline[-1], "predict_proba"):
-        proba = pipeline.predict_proba(X_valid)
-        if proba.shape[1] >= 2:
-            y_proba = proba[:, 1]
-        else:
-            y_proba = proba[:, 0]
-    else:
-        y_proba = y_pred
+    y_proba = positive_class_proba(pipeline, X_valid)
 
     metrics = evaluate_binary(y_valid, y_pred, y_proba)
     LOGGER.info("Validation metrics: %s", metrics)
     print_metrics(metrics, y_valid, y_pred)
+
+    if args.fit_gap:
+        y_pred_tr = pipeline.predict(X_train)
+        y_proba_tr = positive_class_proba(pipeline, X_train)
+        metrics_train = evaluate_binary(y_train, y_pred_tr, y_proba_tr)
+        LOGGER.info("Train metrics (in-sample): %s", metrics_train)
+        print_train_vs_valid(metrics_train, metrics)
 
     model_path = MODELS_DIR / f"{args.model}_pipeline.joblib"
     joblib.dump(pipeline, model_path)
@@ -391,11 +652,19 @@ def run(args: argparse.Namespace) -> None:
     train_params = {
         "model": args.model,
         "tune": args.tune,
+        "tune_xgb": args.tune_xgb,
+        "tune_xgb_trials": args.tune_xgb_trials,
         "cv_splits": args.cv_splits,
         "cv_f1": args.cv_f1,
+        "fit_gap": args.fit_gap,
+        "save_holdout_indices": args.save_holdout_indices,
+        "sample_frac": args.sample_frac,
+        "max_rows": args.max_rows,
         "random_state": RANDOM_STATE,
         "data_file": str(data_path),
     }
+    if holdout_manifest_path is not None:
+        train_params["holdout_manifest"] = str(holdout_manifest_path)
     mlflow_log_run(
         args,
         train_params=train_params,
@@ -409,16 +678,15 @@ def run(args: argparse.Namespace) -> None:
         LOGGER.info("Submission written to: %s", sub_path)
 
     LOGGER.info("Run completed successfully.")
-    append_audit_event(
-        {
-            "event": "train_complete",
-            "model": args.model,
-            "model_path": str(model_path),
-            "val_metrics": metrics,
-        },
-        run_id=run_id,
-        component="train",
-    )
+    complete_payload: Dict[str, Any] = {
+        "event": "train_complete",
+        "model": args.model,
+        "model_path": str(model_path),
+        "val_metrics": metrics,
+    }
+    if holdout_manifest_path is not None:
+        complete_payload["holdout_manifest"] = str(holdout_manifest_path)
+    append_audit_event(complete_payload, run_id=run_id, component="train")
 
 
 def parse_args() -> argparse.Namespace:
@@ -427,13 +695,31 @@ def parse_args() -> argparse.Namespace:
         "--model",
         type=str,
         default="baseline",
-        choices=["baseline", "better", "advanced", "advanced_xgb"],
+        choices=[
+            "baseline",
+            "better",
+            "advanced",
+            "advanced_xgb",
+            "advanced_lgbm",
+            "ultra_ensemble",
+        ],
         help="Model complexity level for teaching progression.",
     )
     parser.add_argument(
         "--tune",
         action="store_true",
-        help="Enable lightweight hyperparameter tuning (advanced model only).",
+        help="Enable lightweight hyperparameter tuning (RandomForest advanced tier only).",
+    )
+    parser.add_argument(
+        "--tune-xgb",
+        action="store_true",
+        help="Enable Optuna hyperparameter tuning for advanced_xgb (uses GPU if XGBoost CUDA works).",
+    )
+    parser.add_argument(
+        "--tune-xgb-trials",
+        type=int,
+        default=16,
+        help="Number of Optuna trials when --tune-xgb is set.",
     )
     parser.add_argument(
         "--make-submission",
@@ -478,6 +764,28 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default=None,
         help="MLflow experiment name (else MLFLOW_EXPERIMENT env or default).",
+    )
+    parser.add_argument(
+        "--fit-gap",
+        action="store_true",
+        help="After training, print train vs holdout metrics to spot over/underfitting.",
+    )
+    parser.add_argument(
+        "--save-holdout-indices",
+        action="store_true",
+        help="Write JSON manifest of train/valid row indices under data/processed/holdout_manifests/.",
+    )
+    parser.add_argument(
+        "--sample-frac",
+        type=float,
+        default=None,
+        help="Stratified fraction of rows after cleaning (0,1] for fast iteration; omit for full data.",
+    )
+    parser.add_argument(
+        "--max-rows",
+        type=int,
+        default=None,
+        help="Stratified row cap after cleaning for fast iteration; overrides --sample-frac if both set.",
     )
     return parser.parse_args()
 
