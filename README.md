@@ -28,7 +28,10 @@ This repo includes a `render.yaml` blueprint with the same settings.
 
 Important for full prediction features:
 - The app expects a trained model at `models/model.joblib`.
-- If the model file is not present in your deployed code, run training before deploy and make the artifact available to Render.
+- If the model file is not present in your deployed code, set Render env var `MODEL_URL` to a public URL of `model.joblib`.
+- Example Render env var:
+  - `MODEL_URL=https://<public-host>/model.joblib`
+- You can also train locally (`make train`) and publish that artifact to a public object URL.
 
 ## Project layout
 

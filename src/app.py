@@ -155,6 +155,14 @@ def tab_command_center(df: pd.DataFrame | None) -> None:
 
 
 def tab_predict(model, df: pd.DataFrame | None, cat_opts: dict[str, list[str]]) -> None:
+    if model is None:
+        st.warning("Prediction model is unavailable on this deployment.")
+        st.caption(
+            "Set a `MODEL_URL` environment variable in Render that points to a "
+            "public `model.joblib`, then redeploy."
+        )
+        return
+
     if "form" not in st.session_state:
         st.session_state.form = {
             "title": "",
@@ -306,6 +314,11 @@ def tab_explore(df: pd.DataFrame) -> None:
 
 
 def tab_batch(model) -> None:
+    if model is None:
+        st.warning("Batch scoring is unavailable because the prediction model is missing.")
+        st.caption("Set `MODEL_URL` in Render and redeploy to enable this tab.")
+        return
+
     st.markdown('<p class="section-title">Batch scoring</p>', unsafe_allow_html=True)
     up = st.file_uploader("Upload CSV", type=["csv"])
     if not up:
@@ -351,12 +364,12 @@ def tab_batch(model) -> None:
 
 def main() -> None:
     inject_executive_css()
+    model = None
+    model_error = None
     try:
         model = get_model()
     except (FileNotFoundError, ValueError) as exc:
-        st.error(str(exc))
-        st.code("make train", language="bash")
-        st.stop()
+        model_error = str(exc)
 
     df = load_dataset()
     cat_opts = categorical_options(df)
@@ -368,10 +381,15 @@ def main() -> None:
 
     with st.sidebar:
         st.markdown("### ◆ App status")
-        st.success("Model online")
+        if model is not None:
+            st.success("Model online")
+        else:
+            st.error("Model offline")
         if df is not None:
             st.metric("Corpus", f"{len(df):,}")
         st.caption(f"{FEATURE_COUNT}+ engineered features")
+        if model_error:
+            st.caption(model_error)
         st.divider()
         st.markdown("**Feature stack**")
         st.markdown("NLP · Vision-L · CV · Survey · 3D analytics")

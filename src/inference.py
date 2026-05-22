@@ -1,22 +1,43 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 import warnings
 
 import joblib
 import pandas as pd
+import requests
 from sklearn.exceptions import InconsistentVersionWarning
 
-from src.config import MODEL_PATH
+from src.config import MODEL_PATH, ensure_dirs
 from src.data import prepare_model_frame
 from src.feature_engineering import explain_features
 from src.survey import survey_from_ui
 
 
+def _download_model(url: str, target: Path) -> None:
+    resp = requests.get(url, timeout=90)
+    resp.raise_for_status()
+    target.write_bytes(resp.content)
+
+
 def load_model(path: Path = MODEL_PATH):
     if not path.exists():
-        raise FileNotFoundError(f"Model not found: {path}\nRun: make train")
+        model_url = os.getenv("MODEL_URL", "").strip()
+        if model_url:
+            ensure_dirs()
+            try:
+                _download_model(model_url, path)
+            except Exception as exc:
+                raise FileNotFoundError(
+                    f"Model not found at {path} and MODEL_URL download failed: {exc}"
+                ) from exc
+        if not path.exists():
+            raise FileNotFoundError(
+                f"Model not found: {path}\n"
+                "Set MODEL_URL env var to a public model.joblib URL or run: make train"
+            )
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always", InconsistentVersionWarning)
         artifact = joblib.load(path)
