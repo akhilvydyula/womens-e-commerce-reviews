@@ -2,10 +2,18 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any
+import sys
 
 import pandas as pd
 import streamlit as st
+
+# Ensure `from src...` imports work when Streamlit runs `src/app.py` directly
+# (e.g., on Render where the script directory can become the import root).
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.config import CATEGORICAL_COLUMNS, RAW_FILE_PATH, TARGET_COLUMN
 from src.dashboard import (
