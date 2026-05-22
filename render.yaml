@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: womens-e-commerce-reviews
+    runtime: python
+    region: virginia
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run src/app.py --server.headless true --server.address 0.0.0.0 --server.port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
