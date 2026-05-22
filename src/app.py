@@ -31,7 +31,7 @@ from src.dashboard import (
     render_executive_kpis,
 )
 from src.data import basic_cleaning, load_raw_data
-from src.inference import load_model, predict, predict_batch
+from src.inference import load_model, load_model_from_bytes, predict, predict_batch
 from src.insights import (
     attach_batch_business_signals,
     build_local_ai_insights,
@@ -364,14 +364,18 @@ def tab_batch(model) -> None:
 
 def main() -> None:
     inject_executive_css()
-    model = None
-    model_error = None
-    try:
-        model = get_model()
-    except (FileNotFoundError, ValueError) as exc:
-        model_error = str(exc)
-
     df = load_dataset()
+    if df is None and "uploaded_df" in st.session_state:
+        df = st.session_state["uploaded_df"]
+
+    model = st.session_state.get("uploaded_model")
+    model_error = None
+    if model is None:
+        try:
+            model = get_model()
+        except (FileNotFoundError, ValueError) as exc:
+            model_error = str(exc)
+
     cat_opts = categorical_options(df)
     render_executive_hero(
         feature_count=FEATURE_COUNT,
@@ -385,6 +389,38 @@ def main() -> None:
             st.success("Model online")
         else:
             st.error("Model offline")
+
+        dataset_upload = st.file_uploader(
+            "Upload dataset CSV (optional)",
+            type=["csv"],
+            key="sidebar_dataset_upload",
+            help="Useful on Render when data/raw CSV is not present.",
+        )
+        if dataset_upload is not None:
+            try:
+                uploaded_df = basic_cleaning(pd.read_csv(dataset_upload))
+                st.session_state["uploaded_df"] = uploaded_df
+                df = uploaded_df
+                st.caption("Dataset loaded from upload for this session.")
+            except Exception as exc:
+                st.warning(f"Dataset upload failed: {exc}")
+
+        if model is None:
+            uploaded_model = st.file_uploader(
+                "Upload model.joblib (optional)",
+                type=["joblib"],
+                key="sidebar_model_upload",
+                help="Session-only fallback when MODEL_URL is not configured.",
+            )
+            if uploaded_model is not None:
+                try:
+                    model = load_model_from_bytes(uploaded_model.getvalue())
+                    st.session_state["uploaded_model"] = model
+                    model_error = None
+                    st.caption("Model loaded from upload for this session.")
+                except Exception as exc:
+                    st.warning(f"Model upload failed: {exc}")
+
         if df is not None:
             st.metric("Corpus", f"{len(df):,}")
         st.caption(f"{FEATURE_COUNT}+ engineered features")
@@ -431,7 +467,10 @@ def main() -> None:
     with tabs[3]:
         tab_science()
     with tabs[4]:
-        tab_explore(df) if df is not None else st.warning("Add CSV to data/raw/")
+        if df is not None:
+            tab_explore(df)
+        else:
+            st.warning("Add CSV to data/raw/")
     with tabs[5]:
         tab_batch(model)
 

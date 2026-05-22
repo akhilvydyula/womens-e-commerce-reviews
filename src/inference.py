@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import os
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,15 @@ from src.config import MODEL_PATH, ensure_dirs
 from src.data import prepare_model_frame
 from src.feature_engineering import explain_features
 from src.survey import survey_from_ui
+
+
+def _validate_artifact(artifact):
+    if isinstance(artifact, dict) and "pipeline" in artifact:
+        if artifact.get("version", 1) < 2:
+            raise ValueError("Stale model artifact. Run: make train")
+        return artifact["pipeline"]
+    # Legacy single-pipeline joblib from older train runs
+    return artifact
 
 
 def _download_model(url: str, target: Path) -> None:
@@ -46,12 +56,18 @@ def load_model(path: Path = MODEL_PATH):
             "Model artifact was trained with a different scikit-learn version. "
             "Run: make train"
         )
-    if isinstance(artifact, dict) and "pipeline" in artifact:
-        if artifact.get("version", 1) < 2:
-            raise ValueError("Stale model artifact. Run: make train")
-        return artifact["pipeline"]
-    # Legacy single-pipeline joblib from older train runs
-    return artifact
+    return _validate_artifact(artifact)
+
+
+def load_model_from_bytes(model_bytes: bytes):
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", InconsistentVersionWarning)
+        artifact = joblib.load(io.BytesIO(model_bytes))
+    if any(isinstance(w.message, InconsistentVersionWarning) for w in caught):
+        raise ValueError(
+            "Uploaded model was trained with a different scikit-learn version."
+        )
+    return _validate_artifact(artifact)
 
 
 def build_row(
