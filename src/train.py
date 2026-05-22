@@ -1,4 +1,4 @@
-"""Train TF-IDF + logistic model. Saves models/model.joblib."""
+"""Train multimodal model (TF-IDF + NLP + vision + survey defaults)."""
 from __future__ import annotations
 
 import joblib
@@ -7,8 +7,8 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from sklearn.pipeline import Pipeline
 
 from src.config import MODEL_PATH, RAW_FILE_PATH, TARGET_COLUMN, ensure_dirs
-from src.data import basic_cleaning, load_raw_data, make_text_feature, split_data
-from src.features import build_text_tabular_preprocessor
+from src.data import load_raw_data, prepare_model_frame, split_data
+from src.features import build_multimodal_preprocessor
 
 
 def main() -> None:
@@ -19,23 +19,23 @@ def main() -> None:
         )
 
     ensure_dirs()
-    df = basic_cleaning(load_raw_data())
-    df["text"] = make_text_feature(df)
+    print("Engineering NLP + vision-language + survey features...")
+    df = prepare_model_frame(load_raw_data())
 
     X_train, X_valid, y_train, y_valid = split_data(df, TARGET_COLUMN)
     pipeline = Pipeline(
         [
-            ("prep", build_text_tabular_preprocessor()),
+            ("prep", build_multimodal_preprocessor()),
             (
                 "model",
                 LogisticRegression(
-                    C=2.0, max_iter=2000, class_weight="balanced", solver="liblinear"
+                    C=1.5, max_iter=3000, class_weight="balanced", solver="liblinear"
                 ),
             ),
         ]
     )
 
-    print("Training…")
+    print(f"Training on {len(X_train):,} rows, {len(X_train.columns)} input columns...")
     pipeline.fit(X_train, y_train)
 
     y_pred = pipeline.predict(X_valid)
@@ -44,7 +44,10 @@ def main() -> None:
     print(f"F1:         {f1_score(y_valid, y_pred):.4f}")
     print(f"ROC-AUC:    {roc_auc_score(y_valid, y_proba):.4f}")
 
-    joblib.dump(pipeline, MODEL_PATH)
+    joblib.dump(
+        {"pipeline": pipeline, "version": 2, "feature_count": len(X_train.columns)},
+        MODEL_PATH,
+    )
     print(f"Saved: {MODEL_PATH}")
 
 

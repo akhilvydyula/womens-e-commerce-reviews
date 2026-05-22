@@ -1,50 +1,70 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
+import warnings
 
 import joblib
 import pandas as pd
+from sklearn.exceptions import InconsistentVersionWarning
 
-from src.config import (
-    CATEGORICAL_COLUMNS,
-    MODEL_PATH,
-    NUMERIC_COLUMNS,
-    TARGET_COLUMN,
-    TEXT_COLUMNS,
-)
-from src.data import make_text_feature
+from src.config import MODEL_PATH
+from src.data import prepare_model_frame
+from src.feature_engineering import explain_features
+from src.survey import survey_from_ui
 
 
 def load_model(path: Path = MODEL_PATH):
     if not path.exists():
         raise FileNotFoundError(f"Model not found: {path}\nRun: make train")
-    return joblib.load(path)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", InconsistentVersionWarning)
+        artifact = joblib.load(path)
+    if any(isinstance(w.message, InconsistentVersionWarning) for w in caught):
+        raise ValueError(
+            "Model artifact was trained with a different scikit-learn version. "
+            "Run: make train"
+        )
+    if isinstance(artifact, dict) and "pipeline" in artifact:
+        if artifact.get("version", 1) < 2:
+            raise ValueError("Stale model artifact. Run: make train")
+        return artifact["pipeline"]
+    # Legacy single-pipeline joblib from older train runs
+    return artifact
 
 
-def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
+def build_row(
+    core: dict[str, Any],
+    survey_answers: dict[str, Any] | None = None,
+    image_bytes: bytes | None = None,
+) -> pd.DataFrame:
+    survey = survey_from_ui(survey_answers) if survey_answers else None
+    row = {**core}
+    return prepare_model_frame(pd.DataFrame([row]), survey=survey, image_bytes=image_bytes)
+
+
+def predict(
+    model,
+    core: dict[str, Any],
+    survey_answers: dict[str, Any] | None = None,
+    image_bytes: bytes | None = None,
+) -> tuple[int, float, pd.DataFrame, dict[str, Any]]:
+    """Returns prediction, score, feature row, and grouped feature explanation."""
+    feat_df = build_row(core, survey_answers, image_bytes)
+    pred = int(model.predict(feat_df)[0])
+    score = float(model.predict_proba(feat_df)[0, 1])
+    breakdown = explain_features(feat_df.iloc[0])
+    return pred, score, feat_df, breakdown
+
+
+def predict_batch(model, df: pd.DataFrame) -> pd.DataFrame:
+    feat = prepare_model_frame(df)
+    preds = model.predict(feat)
+    proba = model.predict_proba(feat)[:, 1]
     out = df.copy()
-    for col in TEXT_COLUMNS:
-        if col not in out.columns:
-            out[col] = ""
-        out[col] = out[col].fillna("").astype(str)
-    for col in NUMERIC_COLUMNS:
-        if col not in out.columns:
-            out[col] = 0
-        out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0)
-    for col in CATEGORICAL_COLUMNS:
-        if col not in out.columns:
-            out[col] = "Unknown"
-        out[col] = out[col].fillna("Unknown").astype(str)
-    if TARGET_COLUMN in out.columns:
-        out = out.drop(columns=[TARGET_COLUMN])
-    if "text" in out.columns:
-        out = out.drop(columns=["text"])
-    out["text"] = make_text_feature(out)
+    out["prediction"] = preds.astype(int)
+    out["score"] = proba
+    out["recommended_label"] = out["prediction"].map(
+        {1: "Recommended", 0: "Not recommended"}
+    )
     return out
-
-
-def predict(model, row: dict) -> tuple[int, float]:
-    df = prepare_features(pd.DataFrame([row]))
-    pred = int(model.predict(df)[0])
-    score = float(model.predict_proba(df)[0, 1])
-    return pred, score
