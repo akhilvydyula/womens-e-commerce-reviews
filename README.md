@@ -1,5 +1,12 @@
 # Women's E-Commerce Reviews
 
+[![License: MIT](https://img.shields.io/github/license/akhilvydyula/womens-e-commerce-reviews)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
+[![GitHub stars](https://img.shields.io/github/stars/akhilvydyula/womens-e-commerce-reviews?style=social)](https://github.com/akhilvydyula/womens-e-commerce-reviews/stargazers)
+[![Open Source](https://img.shields.io/badge/open%20source-welcome-brightgreen)](#open-source)
+
 Multimodal ML: **68+ engineered features** (NLP, vision-language, image CV, research survey) + TF-IDF → logistic regression. Predicts whether a customer will recommend a clothing item.
 
 **Dataset:** [Kaggle — Women's E-Commerce Clothing Reviews](https://www.kaggle.com/datasets/nicapotato/womens-ecommerce-clothing-reviews)
@@ -49,3 +56,20 @@ src/
   ui_survey.py        # questionnaire widgets
   data.py / features.py / config.py
 ```
+
+## Open source
+
+This repository is **open source** under the [MIT License](LICENSE). Stars, issues, and pull requests are welcome — they help others discover the project and improve it for the community.
+
+### How you can help
+
+- **Star** the repo if you find it useful — it helps visibility on GitHub Explore and search.
+- **Open an issue** for bugs, ideas, or questions.
+- **Submit a pull request** with a focused change and a clear description.
+- **Share** the project with anyone learning NLP, multimodal features, or e-commerce analytics.
+
+Maintained by [Akhil Vydyula](https://github.com/akhilvydyula) as part of the Skills Marathon ML portfolio.
+
+## License
+
+Application code is released under the [MIT License](LICENSE). The [Kaggle dataset](https://www.kaggle.com/datasets/nicapotato/womens-ecommerce-clothing-reviews) has its own terms — review before redistribution.
